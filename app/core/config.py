@@ -17,6 +17,9 @@ class Settings(BaseSettings):
 
     groq_api_key: SecretStr | None = Field(default=None, validation_alias="GROQ_API_KEY")
     gemini_api_key: SecretStr | None = Field(default=None, validation_alias="GEMINI_API_KEY")
+    process_log_pseudonym_key: SecretStr | None = Field(
+        default=None, validation_alias="PROCESS_LOG_PSEUDONYM_KEY"
+    )
 
     groq_base_url: str = Field(
         default="https://api.groq.com/openai/v1", validation_alias="GROQ_BASE_URL"
@@ -61,6 +64,13 @@ class Settings(BaseSettings):
         value = value.strip()
         if not value or any(ch.isspace() for ch in value):
             raise ValueError("model name must be a non-empty token without whitespace")
+        return value
+
+    @field_validator("process_log_pseudonym_key")
+    @classmethod
+    def validate_pseudonym_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value().encode("utf-8")) < 32:
+            raise ValueError("PROCESS_LOG_PSEUDONYM_KEY must contain at least 32 bytes")
         return value
 
 
