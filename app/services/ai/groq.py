@@ -56,6 +56,7 @@ class GroqAdapter(BaseAIProvider):
             raise ProviderResponseError("Groq returned an invalid completion payload") from exc
 
     async def stream_completion(self, request: AITutorRequest) -> AsyncIterator[StreamChunk]:
+        final_chunk_seen = False
         async with self._stream_lines(
             "POST", self._url(), headers=self._headers(), json=self._payload(request, stream=True)
         ) as lines:
@@ -64,12 +65,13 @@ class GroqAdapter(BaseAIProvider):
                     continue
                 raw = line[5:].strip()
                 if raw == "[DONE]":
-                    yield StreamChunk(
-                        request_id=request.request_id,
-                        provider=self.provider_name,
-                        model=self.settings.groq_model,
-                        is_final=True,
-                    )
+                    if not final_chunk_seen:
+                        yield StreamChunk(
+                            request_id=request.request_id,
+                            provider=self.provider_name,
+                            model=self.settings.groq_model,
+                            is_final=True,
+                        )
                     return
                 try:
                     data = json.loads(raw)
@@ -77,14 +79,20 @@ class GroqAdapter(BaseAIProvider):
                     delta = choice.get("delta") or {}
                     text = delta.get("content") or ""
                     finish = choice.get("finish_reason")
-                    if text or finish:
+                    usage = data.get("usage") or {}
+                    input_tokens = usage.get("prompt_tokens")
+                    output_tokens = usage.get("completion_tokens")
+                    if text or finish or input_tokens is not None or output_tokens is not None:
+                        final_chunk_seen = final_chunk_seen or finish is not None or input_tokens is not None
                         yield StreamChunk(
                             request_id=request.request_id,
                             delta=text,
                             provider=self.provider_name,
                             model=data.get("model", self.settings.groq_model),
                             finish_reason=finish,
-                            is_final=finish is not None,
+                            is_final=finish is not None or input_tokens is not None,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
                         )
                 except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
                     raise ProviderResponseError("Groq returned an invalid stream event") from exc

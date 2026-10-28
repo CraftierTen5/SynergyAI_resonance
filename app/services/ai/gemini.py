@@ -50,6 +50,8 @@ class GeminiFlashAdapter(BaseAIProvider):
     @staticmethod
     def _content(data: dict[str, object]) -> str:
         candidates = data.get("candidates") or []
+        if not candidates:
+            return ""
         content = candidates[0]["content"]
         return "".join(part.get("text", "") for part in content.get("parts", []))
 
@@ -88,14 +90,19 @@ class GeminiFlashAdapter(BaseAIProvider):
                     text = self._content(data)
                     candidate = (data.get("candidates") or [{}])[0]
                     finish = candidate.get("finishReason")
-                    if text or finish:
+                    usage = data.get("usageMetadata") or {}
+                    input_tokens = usage.get("promptTokenCount")
+                    output_tokens = usage.get("candidatesTokenCount")
+                    if text or finish or input_tokens is not None or output_tokens is not None:
                         yield StreamChunk(
                             request_id=request.request_id,
                             delta=text,
                             provider=self.provider_name,
                             model=self.settings.gemini_model,
                             finish_reason=finish,
-                            is_final=finish is not None,
+                            is_final=finish is not None or input_tokens is not None,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
                         )
                 except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
                     raise ProviderResponseError("Gemini returned an invalid stream event") from exc
