@@ -1,0 +1,90 @@
+"""Export of a student's own process data and consent record.
+
+A student can obtain the process data held about them and the consent they have
+recorded (NFR-PRV-03). The export is scoped to one pseudonymous id and one
+institution; it never resolves the pseudonym back to a real identity, because
+that mapping lives in the restricted identity schema and is not reachable from
+the application path.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+
+from app.db.access import TenantScopedStore
+
+logger = logging.getLogger(__name__)
+
+_PROCESS_LOGS = """
+SELECT assignment_id, step_number, event_type, language, summary, metadata, occurred_at
+FROM assessment.process_logs
+WHERE institution_id = $1 AND pseudonymous_id = $2
+ORDER BY assignment_id, step_number
+"""
+
+_SUBMISSIONS = """
+SELECT assignment_id, capability_breakdown, submitted_at
+FROM assessment.submissions
+WHERE institution_id = $1 AND pseudonymous_id = $2
+ORDER BY submitted_at
+"""
+
+
+@dataclass(frozen=True)
+class StudentDataExport:
+    institution_id: str
+    pseudonymous_id: str
+    generated_at: str
+    process_logs: list[dict[str, Any]]
+    submissions: list[dict[str, Any]]
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "institution_id": self.institution_id,
+                "pseudonymous_id": self.pseudonymous_id,
+                "generated_at": self.generated_at,
+                "process_logs": self.process_logs,
+                "submissions": self.submissions,
+            },
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+
+
+class StudentDataExporter:
+    """Assemble one student's own process data within a single tenant."""
+
+    def __init__(self, store: TenantScopedStore) -> None:
+        self.store = store
+
+    async def export(self, pseudonymous_id: str) -> StudentDataExport:
+        if not pseudonymous_id.startswith("stu_"):
+            raise ValueError("export requires a pseudonymous student identifier")
+        logs = await self.store.fetch(_PROCESS_LOGS, self.store.institution_id, pseudonymous_id)
+        submissions = await self.store.fetch(
+            _SUBMISSIONS, self.store.institution_id, pseudonymous_id
+        )
+        return StudentDataExport(
+            institution_id=self.store.institution_id,
+            pseudonymous_id=pseudonymous_id,
+            generated_at=datetime.now(UTC).isoformat(),
+            process_logs=[self._row(row) for row in logs],
+            submissions=[self._row(row) for row in submissions],
+        )
+
+    @staticmethod
+    def _row(row: Any) -> dict[str, Any]:
+        item = dict(row)
+        for key, value in list(item.items()):
+            if isinstance(value, str) and key == "metadata":
+                try:
+                    item[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    item[key] = {}
+        return item
