@@ -1,4 +1,4 @@
-# SamarthAI / ResonanceAI backend
+## ResonanceAI backend
 
 A small FastAPI modular monolith for a multilingual, responsible-AI learning platform. The MVP centers on deterministic assignment policy checks, assignment management, and a tutor endpoint that checks policy before calling a configurable LLM.
 
@@ -6,15 +6,18 @@ A small FastAPI modular monolith for a multilingual, responsible-AI learning pla
 
 - `GET /`, `GET /health`, and `GET /ready`.
 - `GET /policies` and `POST /policies/check` for normalized RED, YELLOW, and GREEN decisions.
+- Policy schemas accept the backend labels (`RED`, `YELLOW`, `GREEN`) and the orchestrate wire values (`NO_AI`, `PROCESS_DISCLOSURE`, `FULL_INTEGRATION`), then store and return canonical backend labels.
 - Assignment create/list/read/policy-update routes. With PostgreSQL configured these use SQLAlchemy; without it, development uses volatile in-memory assignments and labels every response `volatile_development`.
 - `POST /tutor/chat`: RED is refused in application logic without provider lookup; YELLOW selects Socratic mode and requires explicit disclosure acknowledgment; GREEN permits full-assistance mode.
-- An optional OpenAI-compatible chat-completions adapter configured through environment variables. With no configuration, the app still starts and tutor requests that need a model return 503.
+- Groq (OpenAI-compatible Chat Completions), Gemini (`generateContent`), and legacy OpenAI-compatible adapters. Provider credentials and model names come from environment variables; no key is required for startup.
+- `POST /tutor/chat/stream`: a provider-neutral adapter for the orchestrate branch's `generate_multilingual_guidance(request, provider)` contract. It derives tier/instructions from the stored assignment and rejects client-supplied policy fields. The service must be installed at `app.state.guidance_service`; until then this endpoint returns 503.
+- `POST /viva/generate/from-process-logs`: a boundary for the orchestrate branch's evidence-based viva generator. It reads logs through an injected, authorization-aware server-side reader and rejects institution mismatches; logs are never accepted from the request body.
 - `POST /viva/generate` using the configured provider, and a development-only in-memory process-log view.
 - Pytest coverage for routes, policy decisions, disclosure, and provider behavior.
 
 ## Limitations
 
-Authentication, role checks, and institution-scoped authorization are not implemented. Consequently, these routes are a hackathon development/demo backend and must not be exposed as a production multi-user system. In-memory assignments and logs disappear when the process restarts and are used only when `APP_ENV=development` and no database is configured. Process logs are not persisted in PostgreSQL. The database currently defines the assignment table only; institution, users, and durable logs need schema/model work. Analytics, CSV ingestion, duplicate detection, and retention rules are not implemented. The checked-in synthetic CSV can be validated, but is not imported into application storage. Model instructions for YELLOW improve guidance but cannot guarantee the model will never produce a complete answer. Review generated content and viva questions.
+Authentication, role checks, and institution-scoped authorization are not implemented. Assignment, tutor, viva, and process-log routes therefore return 503 outside `APP_ENV=development`; do not expose the demo environment as a production multi-user system. In-memory assignments and logs disappear when the process restarts and are only enabled in development. Process logs retain hashes of prompt/response text rather than the raw text. The database currently defines the assignment table only; institution, users, and durable logs need schema/model work. The orchestrate-compatible streaming route is an integration boundary and needs an injected service to provide Redis context, cache, provider fallback, and usage metering. Analytics, CSV ingestion, duplicate detection, and retention rules are not implemented. The checked-in synthetic CSV can be validated, but is not imported into application storage. Model instructions for YELLOW cannot guarantee the model will never produce a complete answer. Review generated content and viva questions.
 
 ## Structure
 
@@ -73,16 +76,37 @@ This creates missing tables only; it does not drop tables. For shared or product
 
 ## LLM provider configuration
 
-The adapter supports OpenAI-compatible Chat Completions endpoints:
+The standard `/tutor/chat` endpoint supports Groq, Gemini, and OpenAI-compatible providers. Configure one provider:
 
 ```dotenv
-LLM_PROVIDER=openai
-LLM_API_KEY=your-local-secret
-LLM_MODEL=provider-model-name
-LLM_BASE_URL=https://api.openai.com/v1
+GROQ_API_KEY=your-local-secret
+GROQ_MODEL=llama-3.3-70b-versatile
+# Or instead configure GEMINI_API_KEY and GEMINI_MODEL.
 ```
 
-Keep `.env` private; it is ignored by Git. For a compatible service, set its base URL and model. The request uses `/chat/completions`. Provider calls are not made by ordinary tests. The API key and full database URL are not returned by health/readiness endpoints.
+Keep `.env` private; it is ignored by Git. Groq uses `/chat/completions`; Gemini uses `:generateContent`. For a compatible custom provider, set `LLM_PROVIDER=openai_compatible`, `LLM_API_KEY`, `LLM_MODEL`, and `LLM_BASE_URL`. Provider calls are not made by ordinary tests. The API key and full database URL are not returned by health/readiness endpoints.
+
+## Orchestrate service integration
+
+The streaming route creates an internal request with the orchestrate schema fields: request and institution IDs, conversation ID, messages, language, policy tier, instruction profile, policy version, system instruction, technical terms, and generation limits. It only uses policy data from the assignment; those fields cannot be overridden by the HTTP client. This backend branch defines the integration contract only; the orchestration implementation remains on its independent branch, so this endpoint returns 503 until a service is injected. The evidence viva route likewise needs an authorized process-log reader and an injected viva generator.
+
+When the orchestration service is brought into this checkout, install it from the application composition layer before serving requests:
+
+```python
+from app.main import install_orchestration_services
+
+install_orchestration_services(
+    guidance_service=MultilingualGuidanceService(
+        providers={"groq": groq_adapter, "gemini": gemini_adapter},
+        redis_client=redis_client,
+        usage_meter=usage_meter,
+    ),
+    process_log_reader=authorized_log_reader,
+    viva_generator=viva_question_generator,
+)
+```
+
+The meter must have an institution budget and centrally managed per-model token prices. `REDIS_URL`, `AI_INSTITUTION_BUDGETS_USD`, `AI_MODEL_PRICING`, and `PROCESS_LOG_PSEUDONYM_KEY` are provided as configuration placeholders in `.env.example`; no budget or pricing values are invented here. `/ready` reports whether the service boundary has been installed.
 
 ## Example API requests
 
