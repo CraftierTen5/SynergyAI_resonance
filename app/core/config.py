@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     ai_retry_base_seconds: float = Field(default=0.25, gt=0, le=10)
     ai_circuit_failure_threshold: int = Field(default=5, ge=1, le=100)
     ai_circuit_recovery_seconds: float = Field(default=30.0, gt=0, le=3600)
+    ai_response_cache_ttl_seconds: int = Field(default=300, ge=0, le=86_400)
+    ai_log_stream_maxlen: int = Field(default=100_000, ge=1, le=10_000_000)
 
     default_rate_limit_requests: int = Field(default=60, ge=1, le=100_000)
     default_rate_limit_window_seconds: int = Field(default=60, ge=1, le=86_400)

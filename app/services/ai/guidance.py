@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -9,6 +10,7 @@ import re
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
 
+from app.core.config import get_settings
 from app.schemas.ai import AITutorRequest, StreamChunk, TutorMessage
 from app.services.ai.base import BaseAIProvider
 from app.services.ai.usage import RedisUsageMeter
@@ -28,6 +30,8 @@ class MultilingualGuidanceService:
         max_history_messages: int = 24,
         context_ttl_seconds: int = 2 * 60 * 60,
         first_token_metric: Callable[[float], None] | None = None,
+        cache_ttl_seconds: int | None = None,
+        log_stream_maxlen: int | None = None,
     ) -> None:
         if max_history_messages < 1 or context_ttl_seconds < 60:
             raise ValueError("history limit and context TTL are outside supported bounds")
@@ -37,6 +41,12 @@ class MultilingualGuidanceService:
         self.max_history_messages = max_history_messages
         self.context_ttl_seconds = context_ttl_seconds
         self.first_token_metric = first_token_metric
+        settings = get_settings()
+        self.cache_ttl_seconds = (
+            settings.ai_response_cache_ttl_seconds if cache_ttl_seconds is None else cache_ttl_seconds
+        )
+        self.log_stream_maxlen = settings.ai_log_stream_maxlen if log_stream_maxlen is None else log_stream_maxlen
+        self._log_tasks: set[asyncio.Task[None]] = set()
 
     async def generate_multilingual_guidance(
         self, request: AITutorRequest, provider_name: str
@@ -80,6 +90,18 @@ class MultilingualGuidanceService:
         messages.append(TutorMessage(role="user", content=current_question))
         assembled = request.model_copy(update={"messages": messages})
 
+        response_cache_key = self._response_key(assembled, provider_name, model)
+        cached = await self._cache_get(response_cache_key)
+        if cached is not None:
+            await self._append_context(cache_key, {"role": "user", "content": current_question})
+            await self._append_context(cache_key, {"role": "assistant", "content": cached})
+            self._enqueue_log({"event": "cache_hit", "request_id": request.request_id,
+                               "tenant": hashlib.sha256(institution_id.encode()).hexdigest(),
+                               "provider": provider_name})
+            yield StreamChunk(request_id=request.request_id, delta=cached, provider=provider_name,
+                              model=model, is_final=True)
+            return
+
         # Reserve the worst case before calling the provider. Character count
         # deliberately overestimates token count for multilingual prompts.
         input_upper_bound = max(1, sum(len(message.content) for message in messages))
@@ -101,21 +123,53 @@ class MultilingualGuidanceService:
         try:
             await self._append_context(cache_key, {"role": "user", "content": current_question})
             generation_started = True
-            async for chunk in provider.stream_completion(assembled):
-                if chunk.delta:
-                    generated += chunk.delta
-                    if not first_token_recorded:
-                        first_token_recorded = True
-                        if self.first_token_metric is not None:
-                            try:
-                                self.first_token_metric((time.monotonic() - started_at) * 1000)
-                            except Exception:
-                                logger.exception("first-token metric callback failed")
-                if chunk.input_tokens is not None:
-                    input_tokens = chunk.input_tokens
-                if chunk.output_tokens is not None:
-                    output_tokens = chunk.output_tokens
-                yield chunk
+            active_provider = provider
+            try:
+                async for chunk in active_provider.stream_completion(assembled):
+                    if chunk.delta:
+                        generated += chunk.delta
+                        if not first_token_recorded:
+                            first_token_recorded = True
+                            if self.first_token_metric is not None:
+                                try:
+                                    self.first_token_metric((time.monotonic() - started_at) * 1000)
+                                except Exception:
+                                    logger.exception("first-token metric callback failed")
+                    if chunk.input_tokens is not None:
+                        input_tokens = chunk.input_tokens
+                    if chunk.output_tokens is not None:
+                        output_tokens = chunk.output_tokens
+                    yield chunk
+            except Exception:
+                fallback = self.providers.get("gemini") if provider_name == "groq" else None
+                if generated or fallback is None:
+                    raise
+                await self.usage_meter.release(reservation)
+                active_provider = fallback
+                model = self._model_name(active_provider)
+                reservation = await self.usage_meter.reserve(
+                    institution_id, active_provider.provider_name, model,
+                    input_upper_bound, request.max_output_tokens,
+                )
+                input_tokens = output_tokens = None
+                self._enqueue_log({"event": "provider_fallback", "request_id": request.request_id,
+                                   "tenant": hashlib.sha256(institution_id.encode()).hexdigest(),
+                                   "provider": "gemini"})
+                async for chunk in active_provider.stream_completion(assembled):
+                    if chunk.delta:
+                        generated += chunk.delta
+                        if not first_token_recorded:
+                            first_token_recorded = True
+                            if self.first_token_metric is not None:
+                                try:
+                                    self.first_token_metric((time.monotonic() - started_at) * 1000)
+                                except Exception:
+                                    logger.exception("first-token metric callback failed")
+                    if chunk.input_tokens is not None:
+                        input_tokens = chunk.input_tokens
+                    if chunk.output_tokens is not None:
+                        output_tokens = chunk.output_tokens
+                    yield chunk
 
             actual_input = input_tokens if input_tokens is not None else self._estimate_tokens(
                 "\n".join(message.content for message in messages)
@@ -127,6 +181,10 @@ class MultilingualGuidanceService:
             settled = True
             if generated:
                 await self._append_context(cache_key, {"role": "assistant", "content": generated})
+                await self._cache_set(response_cache_key, generated)
+            self._enqueue_log({"event": "completion", "request_id": request.request_id,
+                               "tenant": hashlib.sha256(institution_id.encode()).hexdigest(),
+                               "provider": active_provider.provider_name})
         finally:
             if not settled:
                 try:
@@ -199,6 +257,48 @@ class MultilingualGuidanceService:
         tenant_hash = hashlib.sha256(institution_id.encode("utf-8")).hexdigest()
         conversation_hash = hashlib.sha256(conversation_id.encode("utf-8")).hexdigest()
         return f"resonanceai:context:v1:{tenant_hash}:{conversation_hash}"
+
+    async def _cache_get(self, key: str) -> str | None:
+        if self.cache_ttl_seconds == 0:
+            return None
+        try:
+            value = await self.redis.get(key)
+            if isinstance(value, bytes):
+                value = value.decode("utf-8")
+            return value if isinstance(value, str) and value else None
+        except Exception:
+            logger.warning("AI response cache read failed", exc_info=True)
+            return None
+
+    async def _cache_set(self, key: str, value: str) -> None:
+        if self.cache_ttl_seconds == 0:
+            return
+        try:
+            await self.redis.set(key, value, ex=self.cache_ttl_seconds)
+        except Exception:
+            logger.warning("AI response cache write failed", exc_info=True)
+
+    def _enqueue_log(self, event: dict[str, str]) -> None:
+        """Schedule Redis stream logging without putting XADD on the response path."""
+        task = asyncio.create_task(self._write_log(event))
+        self._log_tasks.add(task)
+        task.add_done_callback(self._log_tasks.discard)
+
+    async def _write_log(self, event: dict[str, str]) -> None:
+        try:
+            await self.redis.xadd("resonanceai:logs:v1", event,
+                                  maxlen=self.log_stream_maxlen, approximate=True)
+        except Exception:
+            logger.warning("asynchronous AI stream log write failed", exc_info=True)
+
+    @staticmethod
+    def _response_key(request: AITutorRequest, provider: str, model: str) -> str:
+        payload = request.model_dump(mode="json", exclude={"request_id", "conversation_id"})
+        encoded = json.dumps([payload, provider, model], sort_keys=True, ensure_ascii=False,
+                             separators=(",", ":"))
+        digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        tenant_hash = hashlib.sha256((request.institution_id or "").encode("utf-8")).hexdigest()
+        return f"resonanceai:response:v1:{tenant_hash}:{digest}"
 
     @staticmethod
     def _model_name(provider: BaseAIProvider) -> str:
