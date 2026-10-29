@@ -173,6 +173,44 @@ async def test_stream_logging_is_scheduled_outside_completion_path():
 
 
 @pytest.mark.asyncio
+async def test_guidance_persists_only_approved_messages_and_run_metadata():
+    class Persistence:
+        store = SimpleNamespace(institution_id="school-1")
+
+        def __init__(self):
+            self.events = []
+
+        async def ensure_conversation(self, conversation_id, **kwargs):
+            self.events.append(("conversation", conversation_id, kwargs))
+
+        async def append_message(self, conversation_id, **kwargs):
+            self.events.append(("message", conversation_id, kwargs))
+
+        async def find_model_version_id(self, model_name, version):
+            self.events.append(("model_lookup", model_name, version))
+            return None
+
+        async def start_run(self, conversation_id, **kwargs):
+            self.events.append(("start", conversation_id, kwargs))
+            return "run-1"
+
+        async def finish_run(self, run_id, **kwargs):
+            self.events.append(("finish", run_id, kwargs))
+
+    persistence = Persistence()
+    provider = FakeProvider("groq", [chunk("groq", "Visible answer")])
+    svc = MultilingualGuidanceService(
+        {"groq": provider}, FakeRedis(), FakeMeter(), persistence=persistence
+    )
+    chunks = await collect(svc, request())
+    assert "".join(item.delta for item in chunks) == "Visible answer"
+    messages = [event for event in persistence.events if event[0] == "message"]
+    assert [event[2]["role"] for event in messages] == ["user", "assistant"]
+    assert all("system" not in event[2]["content"] for event in messages)
+    assert any(event[0] == "finish" for event in persistence.events)
+
+
+@pytest.mark.asyncio
 async def test_cache_and_logging_failures_do_not_fail_student_response():
     class UnavailableRedis(FakeRedis):
         async def get(self, key):
