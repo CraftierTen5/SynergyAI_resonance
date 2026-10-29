@@ -1,1 +1,0 @@
-"""ResonanceAI application package."""
