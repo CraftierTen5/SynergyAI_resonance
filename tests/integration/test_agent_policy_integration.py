@@ -9,9 +9,9 @@ from app.agent.contracts import (
     TutorCommand,
 )
 from app.dependencies import build_agent_orchestrator
-from app.policy.contracts import ActionDecision, PreflightDecision
-from app.policy.output_guard import ResponseGuard
-from app.policy.service import PolicyActionService
+from app.services.policy.contracts import ActionDecision, PreflightDecision
+from app.services.policy.output_guard import ResponseGuard
+from app.services.policy.service import PolicyActionService
 
 
 class FakeAssignmentService:

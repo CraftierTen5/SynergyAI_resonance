@@ -14,7 +14,7 @@ from app.agent.contracts import (
     NormalizedInput,
     TrustedUserContext,
 )
-from app.policy.contracts import (
+from app.services.policy.contracts import (
     ActionDecision,
     AssignmentPolicyContext,
     Intent,

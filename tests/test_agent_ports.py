@@ -18,12 +18,12 @@ from app.agent.ports import (
     PolicyActionService as PolicyActionPort,
     ResponseGenerator,
 )
-from app.policy.contracts import (
+from app.services.policy.contracts import (
     ActionDecision,
     AssignmentPolicyContext,
     PreflightDecision,
 )
-from app.policy.service import PolicyActionService
+from app.services.policy.service import PolicyActionService
 
 
 class MockAssignments:

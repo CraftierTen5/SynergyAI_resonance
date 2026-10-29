@@ -1,6 +1,6 @@
 """Deterministic policy preflight and action selection (Layer 5)."""
 
-from app.policy.contracts import (
+from app.services.policy.contracts import (
     ActionDecision,
     AssignmentPolicyContext,
     Intent,

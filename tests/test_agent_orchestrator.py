@@ -8,8 +8,8 @@ from app.agent.contracts import (
     TutorCommand,
 )
 from app.agent.orchestrator import AgentOrchestrator
-from app.policy.output_guard import ResponseGuard
-from app.policy.service import PolicyActionService
+from app.services.policy.output_guard import ResponseGuard
+from app.services.policy.service import PolicyActionService
 
 
 class AssignmentStub:

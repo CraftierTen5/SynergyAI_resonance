@@ -1,8 +1,8 @@
 import pytest
 
-from app.policy.contracts import AssignmentPolicyContext
-from app.policy.output_guard import ResponseGuard
-from app.policy.service import PolicyActionService
+from app.services.policy.contracts import AssignmentPolicyContext
+from app.services.policy.output_guard import ResponseGuard
+from app.services.policy.service import PolicyActionService
 
 
 def assignment(policy_level):
