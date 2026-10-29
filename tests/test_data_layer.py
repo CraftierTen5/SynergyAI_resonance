@@ -3,8 +3,8 @@
 These tests run against real PostgreSQL and real Redis. They are skipped when
 either service is unavailable, so the wider suite still runs anywhere.
 """
-
 from __future__ import annotations
+import os
 
 import asyncio
 from datetime import UTC, datetime, timedelta
@@ -169,7 +169,9 @@ async def test_buffered_raw_events_expire_and_are_never_persisted_verbatim(
     result = await service.persist("school-a", assignment_id, pseudonym)
     assert result.written == 1
 
+
     row = await store.fetchrow("SELECT * FROM assessment.process_logs")
+    assert row is not None
     blob = " ".join(str(value) for value in dict(row).values())
     assert "Priya" not in blob
     assert "@" not in blob
@@ -553,10 +555,12 @@ async def test_policy_guard_decision_is_persisted_to_the_audit_chain(clean_db, p
 
     await seed_institution(clean_db, "school-a")
 
-    settings = Settings(
-        POSTGRES_DSN="postgresql://resonance_app:app_local_dev_password@localhost:5432/resonanceai",
-        PROCESS_LOG_PSEUDONYM_KEY=PSEUDONYM_KEY,
-    )
+    settings = Settings.model_validate({
+    "POSTGRES_DSN": os.environ.get(
+        "TEST_POSTGRES_APP_DSN",
+        "postgresql://resonance_app:app_local_dev_password@localhost:5432/resonanceai",
+    ),
+    "PROCESS_LOG_PSEUDONYM_KEY": PSEUDONYM_KEY,})
     sink = DurableAuditSink("school-a", settings=settings)
     try:
         guard = PolicyGuardEngine(
@@ -590,10 +594,10 @@ async def test_policy_guard_denies_when_the_audit_sink_is_unavailable(clean_db, 
 
     await seed_institution(clean_db, "school-a")
     # Point the sink at a port nothing is listening on.
-    settings = Settings(
-        POSTGRES_DSN="postgresql://resonance_app:app_local_dev_password@localhost:59999/resonanceai",
-        PROCESS_LOG_PSEUDONYM_KEY=PSEUDONYM_KEY,
-    )
+    settings = Settings.model_validate({
+    "POSTGRES_DSN": "postgresql://resonance_app:app_local_dev_password@localhost:59999/resonanceai",
+    "PROCESS_LOG_PSEUDONYM_KEY": PSEUDONYM_KEY,
+})
     sink = DurableAuditSink("school-a", settings=settings)
     guard = PolicyGuardEngine(
         {"policy_tier": PolicyLevel.GREEN},
