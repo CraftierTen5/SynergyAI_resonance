@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from app.api.preprocess import create_preprocess_router
+from app.api.routes_tutor import router as tutor_router
 from app.core.config import get_settings
 from app.services.ai.gemini import GeminiFlashAdapter
 from app.services.ai.preprocessing import GeminiPreprocessingService
@@ -17,6 +18,7 @@ app = FastAPI(
     version="0.1.0",
 )
 app.include_router(create_preprocess_router(preprocessing))
+app.include_router(tutor_router)
 
 
 @app.get("/", tags=["system"])
