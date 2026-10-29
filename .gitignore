@@ -157,4 +157,3 @@ __pycache__/
 data/analysis_results*.csv
 *.tmp
 tld/
-venv/
