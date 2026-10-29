@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     )
     gemini_model: str = Field(default="gemini-2.0-flash", validation_alias="GEMINI_MODEL")
 
+    # Enables unauthenticated, server-owned demo fixtures for local pipeline checks.
+    local_placeholder_enabled: bool = Field(
+        default=False, validation_alias="LOCAL_PLACEHOLDER_ENABLED"
+    )
+
     ai_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
     ai_read_timeout_seconds: float = Field(default=45.0, gt=0, le=300)
     ai_max_retries: int = Field(default=3, ge=0, le=10)
