@@ -6,6 +6,18 @@ class ProviderConfigurationError(AIProviderError):
     pass
 
 
+class ProviderAuthenticationError(AIProviderError):
+    pass
+
+
+class ProviderRateLimitError(AIProviderError):
+    pass
+
+
+class ProviderTimeoutError(AIProviderError):
+    pass
+
+
 class ProviderUnavailableError(AIProviderError):
     pass
 

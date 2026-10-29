@@ -47,6 +47,39 @@ class GeminiFlashAdapter(BaseAIProvider):
     def _headers(self) -> dict[str, str]:
         return {"x-goog-api-key": self._api_key(), "Content-Type": "application/json"}
 
+    async def generate_structured(
+        self, prompt: str, images: list[tuple[str, bytes]], schema: dict[str, object] | None = None
+    ) -> str:
+        """Call the configured Gemini model for validated JSON preprocessing output."""
+        parts: list[dict[str, object]] = [{"text": prompt}]
+        for mime_type, content in images:
+            import base64
+
+            parts.append({"inlineData": {"mimeType": mime_type, "data": base64.b64encode(content).decode("ascii")}})
+        payload = {
+            "contents": [{"role": "user", "parts": parts}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "responseSchema": schema or {
+                    "type": "OBJECT",
+                    "properties": {
+                        "detected_language": {"type": "STRING"},
+                        "processed_text": {"type": "STRING"},
+                        "translated": {"type": "BOOLEAN"},
+                        "extracted_text": {"type": "STRING"},
+                        "warnings": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["detected_language", "processed_text", "translated", "extracted_text"],
+                },
+                "temperature": 0,
+            },
+        }
+        response = await self._request("POST", self._url(stream=False), headers=self._headers(), json=payload)
+        try:
+            return self._content(response.json())
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ProviderResponseError("Gemini returned an invalid preprocessing payload") from exc
+
     @staticmethod
     def _content(data: dict[str, object]) -> str:
         candidates = data.get("candidates") or []

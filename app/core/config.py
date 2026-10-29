@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     ai_response_cache_ttl_seconds: int = Field(default=300, ge=0, le=86_400)
     ai_log_stream_maxlen: int = Field(default=100_000, ge=1, le=10_000_000)
 
+    preprocess_max_text_length: int = Field(default=100_000, ge=1, le=500_000, validation_alias="PREPROCESS_MAX_TEXT_LENGTH")
+    preprocess_max_image_bytes: int = Field(default=5_000_000, ge=1, le=20_000_000, validation_alias="PREPROCESS_MAX_IMAGE_BYTES")
+    preprocess_max_images: int = Field(default=5, ge=1, le=10, validation_alias="PREPROCESS_MAX_IMAGES")
+
     default_rate_limit_requests: int = Field(default=60, ge=1, le=100_000)
     default_rate_limit_window_seconds: int = Field(default=60, ge=1, le=86_400)
 

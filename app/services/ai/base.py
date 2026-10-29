@@ -7,7 +7,13 @@ import httpx
 
 from app.core.config import Settings, get_settings
 from app.schemas.ai import AITutorRequest, AITutorResponse, StreamChunk
-from app.services.ai.errors import AIProviderError, ProviderUnavailableError
+from app.services.ai.errors import (
+    AIProviderError,
+    ProviderAuthenticationError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from app.services.ai.resilience import CircuitBreaker, with_retries
 
 
@@ -58,6 +64,14 @@ class BaseAIProvider(ABC):
             await self._breaker.record_failure()
             if isinstance(exc, AIProviderError):
                 raise
+            if isinstance(exc, httpx.TimeoutException):
+                raise ProviderTimeoutError(f"{self.provider_name} request timed out") from exc
+            if isinstance(exc, httpx.HTTPStatusError):
+                status = exc.response.status_code
+                if status in (401, 403):
+                    raise ProviderAuthenticationError(f"{self.provider_name} rejected credentials") from exc
+                if status == 429:
+                    raise ProviderRateLimitError(f"{self.provider_name} rate limit reached") from exc
             raise ProviderUnavailableError(f"{self.provider_name} request failed") from exc
 
     @asynccontextmanager
