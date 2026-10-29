@@ -16,6 +16,33 @@ Run the deterministic test suite with:
 python -m pytest -q
 ```
 
+## Local tutoring pipeline placeholder
+
+The fine-tuned model can be unavailable while the request workflow is being
+integrated. For a deterministic, offline end-to-end run, set
+`LOCAL_PLACEHOLDER_ENABLED=true` in `.env` and start the app as usual. This
+mounts `POST /dev/tutor/chat`, backed by local adapters that implement the same
+ports used by the orchestrator. The route uses server-owned demo assignments:
+`demo-green`, `demo-yellow`, and `demo-red`; policy is never accepted from the
+request. Its demo identity and audit records are in-memory development
+fixtures, not production authentication or durable storage. Leave the flag off
+outside local development.
+
+Example request:
+
+```json
+{
+  "request_id": "local-1",
+  "assignment_id": "demo-green",
+  "message": "Explain recursion"
+}
+```
+
+The model and response adapters live in `app/agent/local_placeholder.py`. To
+use the fine-tuned model later, replace the `ModelClient` implementation (and,
+if desired, `ResponseGenerator`) in the application composition; the
+orchestrator and API result contract remain the same.
+
 Gemini is required for translation, image extraction, and candidate policy evidence extraction. The process can start without a Gemini key; `/ready` reports whether it is configured. PostgreSQL is not configured in this source snapshot. No live provider calls are made by the standard test suite.
 
 ## Current routes
@@ -23,6 +50,7 @@ Gemini is required for translation, image extraction, and candidate policy evide
 - `GET /` and `GET /health`: process liveness.
 - `GET /ready`: process readiness and truthful Gemini/assignment-store/Qwen configuration state. It does not probe provider connectivity.
 - `POST /preprocess`: multipart text and PNG/JPEG/WebP input. Returns original and normalized text, language and extraction statuses, provenance, warnings, and policy resolution metadata. Uploads are processed in memory and not persisted.
+- `POST /dev/tutor/chat`: deterministic end-to-end demo, mounted only when `LOCAL_PLACEHOLDER_ENABLED=true`.
 
 The router accepts an authoritative policy lookup callback for embedding applications. The standalone app has no such repository, so supplied assignment IDs resolve to `UNKNOWN` (`POLICY_NOT_FOUND`) before Gemini is called. A repository callback can distinguish a missing assignment (`ASSIGNMENT_NOT_FOUND`, return `None`) from a known assignment with no policy (empty list). RED and UNKNOWN assignments are rejected before Gemini. YELLOW requires the `disclosure_acknowledged=true` multipart field and returns its configured conditions if acknowledgment is missing. This is a request-level acknowledgment only; no durable acknowledgment record or authenticated user identity exists. Candidate Gemini evidence remains non-authoritative and cannot grant permission. Stored policy outranks extracted text. Conflicting settings, differing conditions or versions, and unsupported policy scopes resolve to `UNKNOWN` and require review.
 
