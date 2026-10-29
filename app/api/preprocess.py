@@ -10,6 +10,7 @@ from app.services.ai.errors import (
     ProviderConfigurationError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    ProviderUnavailableError,
 )
 from app.services.ai.preprocessing import GeminiPreprocessingService
 from app.services.policy.resolver import resolve_policy
@@ -76,6 +77,8 @@ def create_preprocess_router(
             if isinstance(exc, ProviderTimeoutError):
                 status = 504
             elif isinstance(exc, ProviderRateLimitError):
+                status = 503
+            elif isinstance(exc, ProviderUnavailableError):
                 status = 503
             elif isinstance(exc, ProviderAuthenticationError | ProviderConfigurationError):
                 status = 503
