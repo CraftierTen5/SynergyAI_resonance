@@ -1,0 +1,374 @@
+/* ==========================================================================
+   ResonanceAI Design System - High-Fidelity Figma Implementation
+   Color Palette: Deep Forest Sage, Warm Sand, Alabaster Ivory, Charcoal Dark
+   ========================================================================== */
+
+:root {
+  /* Brand Typography */
+  --font-serif: 'Newsreader', Georgia, Cambria, 'Times New Roman', serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+
+  /* Light Theme (Sage Editorial Palette) */
+  --bg-app: #F5F7F4;
+  --bg-surface: #FFFFFF;
+  --bg-surface-subtle: #EEF3EF;
+  --bg-surface-elevated: #FFFFFF;
+  --border-subtle: #E2EAE4;
+  --border-strong: #C8D7CD;
+  --border-focus: #556E5A;
+
+  --text-primary: #17241A;
+  --text-secondary: #4F6355;
+  --text-muted: #7E9485;
+  --text-inverse: #FFFFFF;
+
+  /* Brand Sage */
+  --sage-hero: #6E8472;
+  --sage-hero-dark: #536A57;
+  --sage-primary: #455E4A;
+  --sage-primary-hover: #364C3B;
+  --sage-primary-light: #EBF1EC;
+  --sage-badge: #DFE9E1;
+  --sage-badge-text: #2C4231;
+
+  /* Policy Status Colors */
+  --policy-green-bg: #E8F5EE;
+  --policy-green-border: #9DD4B4;
+  --policy-green-text: #195E35;
+
+  --policy-yellow-bg: #FEF8E8;
+  --policy-yellow-border: #F7DCA2;
+  --policy-yellow-text: #8A610A;
+
+  --policy-red-bg: #FDF1F0;
+  --policy-red-border: #F8BEB7;
+  --policy-red-text: #A8251C;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(20, 35, 23, 0.05);
+  --shadow-md: 0 4px 12px rgba(20, 35, 23, 0.08);
+  --shadow-lg: 0 12px 32px rgba(20, 35, 23, 0.12);
+  --shadow-device: 0 25px 60px -15px rgba(10, 20, 15, 0.35);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+[data-theme="dark"] {
+  --bg-app: #0D120E;
+  --bg-surface: #141B16;
+  --bg-surface-subtle: #1B241E;
+  --bg-surface-elevated: #222E26;
+  --border-subtle: #243228;
+  --border-strong: #334438;
+  --border-focus: #82A389;
+
+  --text-primary: #EEF4F0;
+  --text-secondary: #9EB5A5;
+  --text-muted: #6C8273;
+  --text-inverse: #0D120E;
+
+  --sage-hero: #364A3B;
+  --sage-hero-dark: #243528;
+  --sage-primary: #6E8B74;
+  --sage-primary-hover: #83A289;
+  --sage-primary-light: #1E2B21;
+  --sage-badge: #1E2D22;
+  --sage-badge-text: #A7C5AF;
+
+  --policy-green-bg: #142E1F;
+  --policy-green-border: #235436;
+  --policy-green-text: #7CE0A1;
+
+  --policy-yellow-bg: #30260F;
+  --policy-yellow-border: #574314;
+  --policy-yellow-text: #FCD269;
+
+  --policy-red-bg: #331513;
+  --policy-red-border: #5A231E;
+  --policy-red-text: #FF8F87;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.7);
+}
+
+/* Base resets & typography */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Editorial display typography as seen in Figma */
+.headline-editorial {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+/* Nested wireframe cards graphic motif behind login/welcome */
+.wireframe-stack {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wireframe-box {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  transform-origin: center center;
+  transition: transform 0.6s ease;
+}
+
+.wireframe-box-1 {
+  width: 520px;
+  height: 640px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-4deg);
+}
+
+.wireframe-box-2 {
+  width: 580px;
+  height: 700px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(2.5deg);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.wireframe-box-3 {
+  width: 650px;
+  height: 760px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-1.5deg);
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.wireframe-box-4 {
+  width: 720px;
+  height: 820px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(4deg);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Mobile App Mockup Frame Styling */
+.mobile-device-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 12px;
+  min-height: calc(100vh - 70px);
+}
+
+.mobile-device-shell {
+  width: 395px;
+  min-width: 395px;
+  height: 852px;
+  max-height: 90vh;
+  background: var(--bg-surface);
+  border-radius: 50px;
+  position: relative;
+  box-shadow: 0 0 0 12px #2A362D, 0 0 0 14px #3C4D40, var(--shadow-device);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .mobile-device-shell {
+  box-shadow: 0 0 0 12px #18221B, 0 0 0 14px #26362B, 0 30px 80px rgba(0, 0, 0, 0.85);
+}
+
+/* Dynamic Island & Status Bar */
+.mobile-status-bar {
+  height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 50;
+  background: transparent;
+  user-select: none;
+}
+
+.dynamic-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 32px;
+  background: #000000;
+  border-radius: 20px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.dynamic-island-lens {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #111B24;
+  border: 1px solid #1C2E3D;
+}
+
+.dynamic-island-sensor {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #171717;
+}
+
+.mobile-content-viewport {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Mobile Home Indicator bar at bottom */
+.mobile-home-indicator {
+  height: 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg-surface);
+  user-select: none;
+}
+
+.mobile-home-indicator::after {
+  content: '';
+  width: 134px;
+  height: 4.5px;
+  background: var(--text-secondary);
+  opacity: 0.35;
+  border-radius: 10px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Badge styles */
+.badge-policy-green {
+  background: var(--policy-green-bg);
+  border: 1px solid var(--policy-green-border);
+  color: var(--policy-green-text);
+}
+
+.badge-policy-yellow {
+  background: var(--policy-yellow-bg);
+  border: 1px solid var(--policy-yellow-border);
+  color: var(--policy-yellow-text);
+}
+
+.badge-policy-red {
+  background: var(--policy-red-bg);
+  border: 1px solid var(--policy-red-border);
+  color: var(--policy-red-text);
+}
+
+/* Socratic Comparison Cards */
+.comparison-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.comparison-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+/* Reflective Question Box */
+.reflective-box {
+  background: var(--sage-primary-light);
+  border-left: 4px solid var(--sage-primary);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 14px 18px;
+}
+
+/* Step progression node */
+.step-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  transition: all 0.2s ease;
+}
+
+.step-node.active {
+  border-color: var(--sage-primary);
+  background: var(--sage-primary-light);
+}
+
+/* Micro animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Button pulse on active inference */
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+.pulse-generating {
+  animation: pulseGlow 1.5s infinite ease-in-out;
+}

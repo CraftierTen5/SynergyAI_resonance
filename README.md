@@ -10,6 +10,8 @@ Create a virtual environment, install `requirements.txt`, copy `.env.example` to
 python -m uvicorn app.main:app --reload
 ```
 
+Open http://localhost:8000/ or http://localhost:8000/app in your browser to access the **ResonanceAI Frontend** (featuring both the **Desktop Website** and interactive **Mobile App Look**, Socratic tutoring workspace, stepped hint progression, transparency matrix, and cryptographic disclosure receipts).
+
 Run the deterministic test suite with:
 
 ```powershell
