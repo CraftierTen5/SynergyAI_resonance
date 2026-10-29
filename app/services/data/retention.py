@@ -77,6 +77,30 @@ class RetentionJob:
         report.purged["process_logs"] = await self._purge(
             "assessment.process_logs", now - timedelta(days=self.policy.process_data_days)
         )
+        # Respect explicit document expiry and remove dependants first because
+        # Layer 6A foreign keys intentionally do not cascade academic records.
+        assessment_cutoff = now - timedelta(days=self.policy.assessment_days)
+        report.purged["document_extractions"], report.purged["documents"] = await self._purge_documents(
+            now, assessment_cutoff
+        )
+        report.purged["feedback"] = await self._purge(
+            "assessment.feedback", now - timedelta(days=self.policy.assessment_days), column="created_at"
+        )
+        report.purged["agent_runs"] = await self._purge(
+            "assessment.agent_runs", now - timedelta(days=self.policy.assessment_days),
+            column="started_at",
+            dependent_guard="NOT EXISTS (SELECT 1 FROM assessment.feedback f WHERE f.institution_id = assessment.agent_runs.institution_id AND f.agent_run_id = assessment.agent_runs.agent_run_id)",
+        )
+        report.purged["messages"] = await self._purge(
+            "assessment.messages", now - timedelta(days=self.policy.assessment_days),
+            column="created_at",
+            dependent_guard="NOT EXISTS (SELECT 1 FROM assessment.feedback f WHERE f.institution_id = assessment.messages.institution_id AND f.message_id = assessment.messages.message_id)",
+        )
+        report.purged["conversations"] = await self._purge(
+            "assessment.conversations", now - timedelta(days=self.policy.assessment_days),
+            column="created_at",
+            dependent_guard="NOT EXISTS (SELECT 1 FROM assessment.messages m WHERE m.institution_id = assessment.conversations.institution_id AND m.conversation_id = assessment.conversations.conversation_id) AND NOT EXISTS (SELECT 1 FROM assessment.agent_runs r WHERE r.institution_id = assessment.conversations.institution_id AND r.conversation_id = assessment.conversations.conversation_id) AND NOT EXISTS (SELECT 1 FROM assessment.feedback f WHERE f.institution_id = assessment.conversations.institution_id AND f.conversation_id = assessment.conversations.conversation_id)",
+        )
         report.purged["viva_sessions"] = await self._purge(
             "assessment.viva_sessions", now - timedelta(days=self.policy.assessment_days),
             column="created_at",
@@ -96,12 +120,26 @@ class RetentionJob:
         )
         return report
 
+    async def _purge_documents(self, now: datetime, cutoff: datetime) -> tuple[int, int]:
+        extractions = await self.store.execute(
+            "DELETE FROM core.document_extractions WHERE institution_id = $1 AND ((expires_at IS NOT NULL AND expires_at < $2) OR (expires_at IS NULL AND created_at < $3))",
+            self.store.institution_id, now, cutoff,
+        )
+        documents = await self.store.execute(
+            "DELETE FROM core.documents WHERE institution_id = $1 AND ((expires_at IS NOT NULL AND expires_at < $2) OR (expires_at IS NULL AND created_at < $3)) AND NOT EXISTS (SELECT 1 FROM core.document_extractions e WHERE e.institution_id = core.documents.institution_id AND e.document_id = core.documents.document_id)",
+            self.store.institution_id, now, cutoff,
+        )
+        count = lambda result: int(result.split()[-1]) if result else 0
+        return count(extractions), count(documents)
+
     async def _purge(
-        self, table: str, cutoff: datetime, *, column: str = "recorded_at"
+        self, table: str, cutoff: datetime, *, column: str = "recorded_at",
+        dependent_guard: str | None = None,
     ) -> int:
         # table and column are fixed literals from this module, never caller input.
+        guard = f" AND {dependent_guard}" if dependent_guard else ""
         status = await self.store.execute(
-            f"DELETE FROM {table} WHERE institution_id = $1 AND {column} < $2",
+            f"DELETE FROM {table} WHERE institution_id = $1 AND {column} < $2{guard}",
             self.store.institution_id,
             cutoff,
         )

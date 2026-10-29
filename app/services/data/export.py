@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,6 +34,21 @@ WHERE institution_id = $1 AND pseudonymous_id = $2
 ORDER BY submitted_at
 """
 
+_CONVERSATIONS = """
+SELECT conversation_id, assignment_id, policy_version, policy_tier, status, created_at
+FROM assessment.conversations
+WHERE institution_id = $1 AND actor_pseudonymous_id = $2
+ORDER BY created_at
+"""
+
+_MESSAGES = """
+SELECT m.conversation_id, m.role, m.content, m.created_at
+FROM assessment.messages m
+JOIN assessment.conversations c USING (institution_id, conversation_id)
+WHERE m.institution_id = $1 AND c.actor_pseudonymous_id = $2
+ORDER BY m.conversation_id, m.created_at, m.message_id
+"""
+
 
 @dataclass(frozen=True)
 class StudentDataExport:
@@ -41,6 +57,8 @@ class StudentDataExport:
     generated_at: str
     process_logs: list[dict[str, Any]]
     submissions: list[dict[str, Any]]
+    conversations: list[dict[str, Any]] = field(default_factory=list)
+    messages: list[dict[str, Any]] = field(default_factory=list)
 
     def to_json(self) -> str:
         return json.dumps(
@@ -50,6 +68,8 @@ class StudentDataExport:
                 "generated_at": self.generated_at,
                 "process_logs": self.process_logs,
                 "submissions": self.submissions,
+                "conversations": self.conversations,
+                "messages": self.messages,
             },
             indent=2,
             sort_keys=True,
@@ -64,18 +84,24 @@ class StudentDataExporter:
         self.store = store
 
     async def export(self, pseudonymous_id: str) -> StudentDataExport:
-        if not pseudonymous_id.startswith("stu_"):
+        if re.fullmatch(r"stu_[0-9a-f]{32}", pseudonymous_id) is None:
             raise ValueError("export requires a pseudonymous student identifier")
         logs = await self.store.fetch(_PROCESS_LOGS, self.store.institution_id, pseudonymous_id)
         submissions = await self.store.fetch(
             _SUBMISSIONS, self.store.institution_id, pseudonymous_id
         )
+        conversations = await self.store.fetch(
+            _CONVERSATIONS, self.store.institution_id, pseudonymous_id
+        )
+        messages = await self.store.fetch(_MESSAGES, self.store.institution_id, pseudonymous_id)
         return StudentDataExport(
             institution_id=self.store.institution_id,
             pseudonymous_id=pseudonymous_id,
             generated_at=datetime.now(UTC).isoformat(),
             process_logs=[self._row(row) for row in logs],
             submissions=[self._row(row) for row in submissions],
+            conversations=[self._row(row) for row in conversations],
+            messages=[self._row(row) for row in messages],
         )
 
     @staticmethod

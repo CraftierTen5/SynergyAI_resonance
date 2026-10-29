@@ -34,8 +34,8 @@ class BaseAIProvider(ABC):
         """Return a complete provider-neutral tutor response."""
 
     @abstractmethod
-    async def stream_completion(self, request: AITutorRequest) -> AsyncIterator[StreamChunk]:
-        """Yield provider-neutral chunks as they arrive."""
+    def stream_completion(self, request: AITutorRequest) -> AsyncIterator[StreamChunk]:
+        """Return an async iterator of provider-neutral chunks."""
 
     async def _request(self, method: str, url: str, **kwargs: object) -> httpx.Response:
         await self._breaker.before_call()

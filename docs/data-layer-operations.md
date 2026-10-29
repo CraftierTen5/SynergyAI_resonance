@@ -7,7 +7,7 @@ that guard them, and how to run migrations, backups and retention.
 
 | Store | Technology | Holds | Notes |
 | --- | --- | --- | --- |
-| Relational | PostgreSQL | Institutions, courses, assignments, policy versions, pseudonymised profiles, submissions, process summaries, viva, evaluations, audit records | System of record |
+| Relational | PostgreSQL | Academic structure, model metadata, document metadata and extraction records, conversations, approved messages, agent-run metadata, feedback, process summaries, assessments, audit records | System of record |
 | Cache and stream | Redis | Sessions, rate-limit counters, policy cache, conversation buffers, short-lived raw process-log buffer, step-event stream | Never a system of record; loss degrades, never destroys |
 | Aggregated analytics | PostgreSQL (`analytics` schema) | Anonymised institution-level measures only | No pseudonymous ids reach it |
 
@@ -15,9 +15,9 @@ that guard them, and how to run migrations, backups and retention.
 
 | Schema | Contents | Reaching roles |
 | --- | --- | --- |
-| `core` | Academic structure, policy configuration | `resonance_app` |
+| `core` | Academic structure, policy configuration, model registry metadata, document metadata and extraction results | `resonance_app` |
 | `identity` | Accounts, consent, pseudonym mapping | `resonance_identity_owner` only |
-| `assessment` | Anonymised process logs, submissions, viva, evaluations | `resonance_app` |
+| `assessment` | Anonymised process logs, submissions, viva, evaluations, conversations, messages, agent runs and feedback | `resonance_app` |
 | `audit` | Append-only, hash-chained events | `resonance_app` (insert/select), `resonance_audit_writer` (insert/select) |
 | `analytics` | Institution-level aggregates | `resonance_app` |
 | all | Backup and DR reads | `resonance_backup` (BYPASSRLS) |
@@ -57,6 +57,16 @@ Migration rules:
   previous version still serving traffic (DL-12).
 - Add every new table to the row-level security block and to the backup grants.
 
+Migration `0007_layer_6a_persistence.sql` adds Layer 6A (the durable persistence
+capabilities above the existing Layer 4 data-layer foundation). The seven new
+tables are tenant scoped, use forced RLS and composite tenant-aware foreign keys.
+`core.documents` stores only controlled storage keys and metadata; binary files
+are not stored in PostgreSQL. `core.document_extractions` can contain sensitive
+text and is subject to explicit expiry or the assessment retention window.
+`assessment.messages` stores only
+user/assistant content; system prompts and hidden reasoning are excluded.
+Backups include these tables through the existing schema-wide backup role grants.
+
 ## Backup, restore and disaster recovery
 
 Recovery targets: RPO of 1 hour or less, RTO of 4 hours or less (NFR-REL-02).
@@ -90,8 +100,12 @@ Operational notes:
 
 Retention windows are configurable per institution (BRL-10) and default to the
 validated settings. `RetentionJob` purges process data and assessment records
-once their window passes. Audit records are never purged by that path; they carry
-their own long retention.
+once their window passes, removes explicitly expired document extractions before
+eligible document metadata, applies the assessment window when document expiry
+is unset, and leaves records with active foreign-key dependants in place. The
+current repository has no object-storage adapter, so deployments that attach
+one must configure its lifecycle policy to delete binaries on the same schedule.
+Audit records are never purged by that path; they carry their own long retention.
 
 | Data | Default window | Setting |
 | --- | --- | --- |
@@ -110,6 +124,23 @@ their own long retention.
   on read, so a small group cannot be singled out (DL-9).
 - Students can export their own process data and consent record; the export is
   scoped to one pseudonym and never resolves it to a real identity.
+- When guidance is constructed with `AssessmentPersistenceFactory` (or a
+  tenant-specific `AssessmentPersistenceService`), it persists
+  the policy-approved user/assistant messages and safe run metadata through
+  `TenantScopedStore`. Pass the authenticated actor's `stu_<32 lowercase hex>`
+  pseudonym on `AITutorRequest.actor_pseudonymous_id`; the request validator
+  rejects malformed values and the persistence layer prevents a conversation
+  from being rebound to a different pseudonym. Only the trusted authentication
+  boundary may populate this field. Pass the authorized assignment UUID on
+  `AITutorRequest.assignment_id` when available. The student export includes these
+  messages without resolving the pseudonym to an identity.
+- `AssessmentPersistenceService` also provides validated write methods for
+  model-version metadata, document metadata, extraction records, and feedback.
+  Agent runs attach a registry row when its `(model_name, version)` matches the
+  provider and model selected for that run. These are persistence boundaries
+  only. No object-storage, OCR, upload, or feedback HTTP endpoint exists in this
+  repository; callers must supply an already controlled private storage key and
+  an authorized tenant scoped store.
 
 ## Audit integrity
 

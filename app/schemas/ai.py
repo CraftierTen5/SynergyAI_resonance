@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,6 +19,11 @@ class AITutorRequest(BaseModel):
     request_id: str = Field(min_length=1, max_length=128)
     institution_id: str | None = Field(default=None, min_length=1, max_length=128)
     conversation_id: str | None = Field(default=None, min_length=1, max_length=256)
+    assignment_id: UUID | None = None
+    actor_pseudonymous_id: str | None = Field(
+        default=None, pattern=r"^stu_[0-9a-f]{32}$",
+        description="Must be populated by the trusted authentication boundary.",
+    )
     messages: list[TutorMessage] = Field(min_length=1, max_length=100)
     language: str = Field(default="en", min_length=2, max_length=35)
     policy_tier: Literal["yellow", "green"]

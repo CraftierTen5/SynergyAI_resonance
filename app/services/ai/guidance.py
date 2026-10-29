@@ -9,13 +9,43 @@ import logging
 import re
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
+from typing import Any, Protocol
 
 from app.core.config import get_settings
 from app.schemas.ai import AITutorRequest, StreamChunk, TutorMessage
 from app.services.ai.base import BaseAIProvider
 from app.services.ai.usage import RedisUsageMeter
+from app.services.assessment.persistence import (
+    AssessmentPersistenceFactory,
+    AssessmentPersistenceService,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class _RedisClient(Protocol):
+    """Redis commands used here; protocol keeps test and production clients typed."""
+
+    async def lrange(self, key: str, start: int, end: int) -> list[Any]: ...
+
+    async def rpush(self, key: str, value: str) -> Any: ...
+
+    async def ltrim(self, key: str, start: int, end: int) -> Any: ...
+
+    async def expire(self, key: str, seconds: int) -> Any: ...
+
+    async def get(self, key: str) -> Any: ...
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> Any: ...
+
+    async def xadd(
+        self,
+        stream: str,
+        fields: dict[str, str],
+        *,
+        maxlen: int | None = None,
+        approximate: bool = False,
+    ) -> Any: ...
 
 
 class MultilingualGuidanceService:
@@ -24,7 +54,7 @@ class MultilingualGuidanceService:
     def __init__(
         self,
         providers: Mapping[str, BaseAIProvider],
-        redis_client: object,
+        redis_client: _RedisClient,
         usage_meter: RedisUsageMeter,
         *,
         max_history_messages: int = 24,
@@ -32,12 +62,18 @@ class MultilingualGuidanceService:
         first_token_metric: Callable[[float], None] | None = None,
         cache_ttl_seconds: int | None = None,
         log_stream_maxlen: int | None = None,
+        persistence: AssessmentPersistenceService | None = None,
+        persistence_factory: AssessmentPersistenceFactory | None = None,
     ) -> None:
         if max_history_messages < 1 or context_ttl_seconds < 60:
             raise ValueError("history limit and context TTL are outside supported bounds")
+        if persistence is not None and persistence_factory is not None:
+            raise ValueError("configure persistence or persistence_factory, not both")
         self.providers = dict(providers)
         self.redis = redis_client
         self.usage_meter = usage_meter
+        self.persistence = persistence
+        self.persistence_factory = persistence_factory
         self.max_history_messages = max_history_messages
         self.context_ttl_seconds = context_ttl_seconds
         self.first_token_metric = first_token_metric
@@ -75,7 +111,22 @@ class MultilingualGuidanceService:
             raise ValueError("request must contain a user message")
         current_question = request.messages[current_index].content
         system_prompt = self._system_prompt(request)
-
+        persistence = self.persistence
+        if self.persistence_factory is not None:
+            persistence = self.persistence_factory.for_institution(institution_id)
+        if persistence is not None:
+            if persistence.store.institution_id != institution_id:
+                raise ValueError("persistence tenant must match the request institution")
+            await persistence.ensure_conversation(
+                conversation_id, policy_version=request.policy_version,
+                policy_tier=request.policy_tier,
+                actor_pseudonymous_id=request.actor_pseudonymous_id,
+                assignment_id=request.assignment_id,
+            )
+            await persistence.append_message(
+                conversation_id, role="user", content=current_question,
+                idempotency_key=f"{request.request_id}:user",
+            )
         cache_key = self._context_key(institution_id, conversation_id)
         history = await self._load_history(cache_key)
         if not history:
@@ -95,6 +146,11 @@ class MultilingualGuidanceService:
         if cached is not None:
             await self._append_context(cache_key, {"role": "user", "content": current_question})
             await self._append_context(cache_key, {"role": "assistant", "content": cached})
+            if persistence is not None:
+                await persistence.append_message(
+                    conversation_id, role="assistant", content=cached,
+                    idempotency_key=f"{request.request_id}:assistant",
+                )
             self._enqueue_log({"event": "cache_hit", "request_id": request.request_id,
                                "tenant": hashlib.sha256(institution_id.encode()).hexdigest(),
                                "provider": provider_name})
@@ -112,11 +168,28 @@ class MultilingualGuidanceService:
             input_upper_bound,
             request.max_output_tokens,
         )
+        run_id = None
+        model_version_id = None
+        if persistence is not None:
+            try:
+                model_version_id = await persistence.find_model_version_id(
+                    provider.provider_name, model
+                )
+                run_id = await persistence.start_run(
+                    conversation_id, request_id=request.request_id,
+                    policy_version=request.policy_version, policy_tier=request.policy_tier,
+                    provider=provider.provider_name, model_name=model,
+                    model_version_id=model_version_id,
+                )
+            except Exception:
+                await self.usage_meter.release(reservation)
+                raise
 
         generated = ""
         input_tokens: int | None = None
         output_tokens: int | None = None
         settled = False
+        run_finished = False
         generation_started = False
         started_at = time.monotonic()
         first_token_recorded = False
@@ -182,10 +255,36 @@ class MultilingualGuidanceService:
             if generated:
                 await self._append_context(cache_key, {"role": "assistant", "content": generated})
                 await self._cache_set(response_cache_key, generated)
+                if persistence is not None:
+                    await persistence.append_message(
+                        conversation_id, role="assistant", content=generated,
+                        idempotency_key=f"{request.request_id}:assistant",
+                    )
+            if persistence is not None and run_id is not None:
+                actual_model_version_id = await persistence.find_model_version_id(
+                    active_provider.provider_name, model
+                )
+                await persistence.finish_run(
+                    run_id, input_tokens=actual_input, output_tokens=actual_output,
+                    result_sha256=hashlib.sha256(generated.encode("utf-8")).hexdigest(),
+                    provider=active_provider.provider_name, model_name=model,
+                    model_version_id=actual_model_version_id,
+                    update_model_version=True,
+                )
+                run_finished = True
             self._enqueue_log({"event": "completion", "request_id": request.request_id,
                                "tenant": hashlib.sha256(institution_id.encode()).hexdigest(),
                                "provider": active_provider.provider_name})
         finally:
+            if persistence is not None and run_id is not None and not run_finished:
+                try:
+                    await persistence.finish_run(
+                        run_id,
+                        error_category="persistence_error" if settled else "provider_error",
+                    )
+                    run_finished = True
+                except Exception:
+                    logger.exception("failed to close persisted AI run")
             if not settled:
                 try:
                     if generation_started:
