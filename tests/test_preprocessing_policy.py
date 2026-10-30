@@ -49,17 +49,19 @@ async def test_validates_image_signature_and_structured_output():
         await service.preprocess(PreprocessingRequest(original_text="hello"))
 
 
-def test_policy_flags_are_explicit_and_missing_policy_is_unknown():
+def test_policy_flags_are_explicit_and_missing_policy_uses_yellow():
     for wire, expected in (("NO_AI", "RED"), ("PROCESS_DISCLOSURE", "YELLOW"), ("FULL_INTEGRATION", "GREEN")):
         result = resolve_policy(assignment_id="a1", authoritative_records=[{"policy": wire, "required_conditions": ["Disclose use"]}])
         assert result.policy_flag == expected
-    assert resolve_policy(assignment_id="a1").policy_flag == "UNKNOWN"
-    assert resolve_policy(assignment_id="a1", authoritative_records=[{"policy": "NO_AI"}, {"policy": "FULL_INTEGRATION"}]).resolution_reason == "POLICY_CONFLICT"
+    assert resolve_policy(assignment_id="a1").policy_flag == "YELLOW"
+    conflict = resolve_policy(assignment_id="a1", authoritative_records=[{"policy": "NO_AI"}, {"policy": "FULL_INTEGRATION"}])
+    assert conflict.policy_flag == "YELLOW"
+    assert conflict.resolution_reason == "POLICY_CONFLICT"
 
 
 def test_candidate_evidence_and_student_claim_cannot_grant_permission():
     result = resolve_policy(assignment_id=None)
-    assert result.policy_flag == "UNKNOWN"
+    assert result.policy_flag == "YELLOW"
 
 
 def test_conflicting_conditions_and_scoped_policy_require_review():
@@ -68,15 +70,18 @@ def test_conflicting_conditions_and_scoped_policy_require_review():
         {"policy": "PROCESS_DISCLOSURE", "required_conditions": ["No generated text"]},
     ])
     scoped = resolve_policy(assignment_id="a1", authoritative_records=[{"policy": "FULL_INTEGRATION", "scope": "brainstorming"}])
-    assert conditions.policy_flag == "UNKNOWN"
+    assert conditions.policy_flag == "YELLOW"
     assert conditions.resolution_reason == "POLICY_CONFLICT"
-    assert scoped.policy_flag == "UNKNOWN"
+    assert scoped.policy_flag == "YELLOW"
     assert scoped.resolution_reason == "POLICY_SCOPE_UNCLEAR"
 
 
 def test_assignment_missing_and_policy_missing_have_separate_reason_codes():
-    assert resolve_policy(assignment_id="missing", authoritative_records=None).resolution_reason == "ASSIGNMENT_NOT_FOUND"
-    assert resolve_policy(assignment_id="known", authoritative_records=[]).resolution_reason == "POLICY_NOT_FOUND"
+    missing_assignment = resolve_policy(assignment_id="missing", authoritative_records=None)
+    missing_policy = resolve_policy(assignment_id="known", authoritative_records=[])
+    assert missing_assignment.policy_flag == missing_policy.policy_flag == "YELLOW"
+    assert missing_assignment.resolution_reason == "ASSIGNMENT_NOT_FOUND"
+    assert missing_policy.resolution_reason == "POLICY_NOT_FOUND"
 
 
 def test_future_classifier_contract_validates_but_has_no_provider():
@@ -102,7 +107,7 @@ def test_status_routes_and_preprocess_missing_key_are_controlled():
     assert "original submission was not modified" in response.json()["detail"]
 
 
-def test_red_and_unknown_assignment_are_rejected_before_gemini():
+def test_red_is_rejected_and_unknown_assignment_uses_yellow_disclosure_gate():
     from app.api.preprocess import create_preprocess_router
     from app.core.config import Settings
 
@@ -117,7 +122,7 @@ def test_red_and_unknown_assignment_are_rejected_before_gemini():
     app2 = FastAPI()
     app2.include_router(create_preprocess_router(service))
     response = TestClient(app2).post("/preprocess", data={"text": "Help", "assignment_id": "unknown"})
-    assert response.status_code == 409
+    assert response.status_code == 428
     assert provider.prompt == ""
 
 

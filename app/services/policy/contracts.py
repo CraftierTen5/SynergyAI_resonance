@@ -52,14 +52,15 @@ _POLICY_LEVEL_ALIASES = {
     "PROCESS_DISCLOSURE": "YELLOW",
     "GREEN": "GREEN",
     "FULL_INTEGRATION": "GREEN",
+    "UNKNOWN": "YELLOW",
 }
 
 
 def normalize_policy_level(value: object) -> object:
     """Normalize canonical or stored wire policy names to RED/YELLOW/GREEN.
 
-    Unknown values are returned unchanged so Pydantic's ``PolicyLevel``
-    validation rejects them with its normal validation error.
+    The explicit UNKNOWN tag uses guided assistance; other unrecognized values
+    remain unchanged so Pydantic validation rejects them.
     """
     if isinstance(value, str):
         normalized = _POLICY_LEVEL_ALIASES.get(value.strip().upper())
