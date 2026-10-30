@@ -46,9 +46,15 @@ order. Applied files are recorded in `public.schema_migrations`, and the runner
 holds an advisory lock so a rolling deployment cannot apply a file twice.
 
 ```bash
-POSTGRES_DSN="postgresql://resonance_migrator:...@host:5432/resonanceai" \
+POSTGRES_DSN="postgresql://postgres:...@host:5432/resonanceai" \
     python scripts/bootstrap_data_layer.py
 ```
+
+For the first local bootstrap, use a PostgreSQL administrator: migration `0001`
+creates database roles and the `pgcrypto` extension. The application roles are
+created as `NOLOGIN`; set a local password/login on `resonance_app` after the
+migrations, then use that restricted role for Uvicorn. Production deployments
+should provision a separate migration login with the required DDL privileges.
 
 Migration rules:
 

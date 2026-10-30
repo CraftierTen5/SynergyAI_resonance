@@ -61,34 +61,12 @@
         <div class="text-left">
           <div class="font-serif text-lg font-medium tracking-tight text-[var(--text-primary)] flex items-center gap-1.5">
             ResonanceAI
-            <span class="text-[10px] font-sans font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-[var(--sage-primary-light)] text-[var(--sage-primary)]">v0.1</span>
           </div>
           <p class="text-[10px] font-mono text-[var(--text-muted)] tracking-wider">ACADEMIC TUTORING</p>
         </div>
       </button>
-
-      <!-- Region & Security Badge (NFR-PRV-05 India compliance) -->
-      <div class="hidden lg:flex items-center gap-2 text-xs font-mono px-2.5 py-1 rounded-full bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span>ap-south-1 (India)</span>
-        <span class="text-[var(--text-muted)]">•</span>
-        <span>Tenant: IITD-CS</span>
-      </div>
     </div>
-
-    <!-- Center Mode Switcher: Desktop Website vs Mobile App Mockup -->
-    <div class="flex items-center bg-[var(--bg-surface-subtle)] p-1 rounded-xl border border-[var(--border-subtle)] shadow-inner">
-      <button id="view-mode-desktop" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm">
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
-        <span>Desktop Website</span>
-      </button>
-      <button id="view-mode-mobile" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="12" x2="12.01" y1="18" y2="18"/></svg>
-        <span>Mobile App Look</span>
-      </button>
-    </div>
-
-    <!-- Right Controls: Theme, Endpoints Inspector, User Profile -->
+    <!-- Right Controls: Theme and User Profile -->
     <div class="flex items-center gap-2.5">
       <!-- Theme Switcher -->
       <button id="btn-theme-toggle" class="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] transition-colors" title="Toggle Light/Dark Theme">
@@ -96,20 +74,14 @@
         <svg id="icon-moon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
       </button>
 
-      <!-- Live API & Endpoints Inspector Drawer Button -->
-      <button id="btn-open-inspector" class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono font-medium rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] transition-colors">
-        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-        <span>.env Endpoints</span>
-      </button>
-
       <!-- Student Profile Pill -->
-      <button id="btn-profile-menu" class="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] transition-colors">
-        <div class="w-7 h-7 rounded-full bg-[var(--sage-badge)] text-[var(--sage-badge-text)] font-semibold text-xs flex items-center justify-center">
-          AS
+      <button id="btn-profile-menu" title="Open workspace settings" aria-label="Open workspace settings" class="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] transition-colors">
+        <div id="profile-initials" class="w-7 h-7 rounded-full bg-[var(--sage-badge)] text-[var(--sage-badge-text)] font-semibold text-xs flex items-center justify-center">
+          TS
         </div>
         <div class="text-left hidden sm:block">
-          <p class="text-xs font-medium leading-none text-[var(--text-primary)]">Ananya Sharma</p>
-          <p class="text-[10px] text-[var(--text-muted)] font-mono leading-tight">CS Year 3</p>
+          <p id="profile-name" class="text-xs font-medium leading-none text-[var(--text-primary)]">Guest</p>
+          <p id="profile-status" class="text-[10px] text-[var(--text-muted)] font-mono leading-tight">Not signed in</p>
         </div>
       </button>
     </div>
@@ -126,7 +98,7 @@
         <!-- New Inquiry Action Button -->
         <button id="btn-new-inquiry" class="w-full py-2.5 px-4 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm transition-all transform active:scale-95">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>Start Socratic Inquiry</span>
+          <span>Start Learning</span>
         </button>
 
         <!-- Navigation Links -->
@@ -139,10 +111,6 @@
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span>Tutor Workspace</span>
           </button>
-          <button data-nav="steps" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
-            <span>Stepped Progression</span>
-          </button>
           <button data-nav="policy" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <span>Transparency Matrix</span>
@@ -151,23 +119,15 @@
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
             <span>Viva Preparation</span>
           </button>
-          <button data-nav="settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            <span>Workspace Settings</span>
-          </button>
         </nav>
       </div>
 
-      <!-- Quick Switch to Welcome Screen / Auth Demo -->
+      <!-- Sign out -->
       <div class="border-t border-[var(--border-subtle)] pt-4 space-y-3">
         <button id="btn-show-welcome-screen" class="w-full text-xs font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-between px-2 py-1.5 rounded hover:bg-[var(--bg-surface-subtle)]">
-          <span>View Sign-in Screen</span>
+          <span>Sign out</span>
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
         </button>
-        <div class="p-3 rounded-lg bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] text-[11px] text-[var(--text-muted)] space-y-1">
-          <p class="font-medium text-[var(--text-secondary)]">Layer 4 Guarantee</p>
-          <p>Append-only hash-chained audit verification active.</p>
-        </div>
       </div>
     </aside>
 
@@ -213,10 +173,6 @@
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           <span class="text-[10px] font-medium">Policy</span>
         </button>
-        <button data-nav="settings" class="mobile-tab-item flex flex-col items-center gap-1 text-[var(--text-muted)]">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span class="text-[10px] font-medium">Settings</span>
-        </button>
       </nav>
 
       <!-- Bottom Home Indicator Bar -->
@@ -245,9 +201,9 @@
       <div class="p-3.5 rounded-xl bg-[var(--policy-yellow-bg)] border border-[var(--policy-yellow-border)] text-xs text-[var(--policy-yellow-text)] space-y-1">
         <div class="flex items-center gap-2 font-semibold">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span id="disclose-assignment-title">CS202: Graph Traversal & BFS/DFS • Yellow Policy</span>
+          <span id="disclose-assignment-title">No assignment selected</span>
         </div>
-        <p class="leading-relaxed">Policy requires transparent disclosure of AI assistance and self-reflection prior to repository submission.</p>
+        <p class="leading-relaxed">Policy requires transparent disclosure of AI assistance prior to repository submission.</p>
       </div>
 
       <!-- Integrity Criteria Checkboxes -->
@@ -266,13 +222,6 @@
         </label>
       </div>
 
-      <!-- Reflection Notes Textarea -->
-      <div class="space-y-1.5">
-        <label class="block text-xs font-medium text-[var(--text-primary)]">
-          Reflection notes: What was your main conceptual breakthrough?
-        </label>
-        <textarea id="disclose-reflection-input" rows="3" class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--sage-primary)] transition-colors" placeholder="e.g. Realized that cycle detection in directed graphs requires tracking nodes currently in the recursion stack, not just visited set..."></textarea>
-      </div>
 
       <!-- Actions -->
       <div class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border-subtle)]">
@@ -309,7 +258,7 @@
         </div>
         <div class="flex justify-between border-t border-[var(--border-subtle)] pt-2 text-[11px]">
           <span class="text-[var(--text-muted)]">INSTITUTION:</span>
-          <span class="text-[var(--text-secondary)]">IIT Delhi (Tenant 1697)</span>
+          <span class="text-[var(--text-secondary)]">Institution unavailable</span>
         </div>
         <div class="flex justify-between border-t border-[var(--border-subtle)] pt-2 text-[11px]">
           <span class="text-[var(--text-muted)]">STATUS:</span>
@@ -328,70 +277,6 @@
       </div>
     </div>
   </div>
-
-  <!-- ========================================================================
-       API & .ENV ENDPOINT INSPECTOR DRAWER
-       ======================================================================== -->
-  <aside id="inspector-drawer" class="fixed right-0 top-0 bottom-0 w-full sm:w-[460px] bg-[var(--bg-surface)] border-l border-[var(--border-subtle)] shadow-2xl z-50 transform translate-x-full transition-transform duration-300 flex flex-col">
-    <div class="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-        <h3 class="font-mono text-sm font-semibold text-[var(--text-primary)]">.env & Layer Integration</h3>
-      </div>
-      <button id="btn-close-inspector" class="p-1 rounded-lg hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)]">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-
-    <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs font-mono">
-      <!-- Active .env Settings Overview -->
-      <div class="p-3.5 rounded-xl bg-[var(--bg-app)] border border-[var(--border-subtle)] space-y-2">
-        <p class="font-sans font-semibold text-xs text-[var(--text-primary)]">Configured Environment (.env)</p>
-        <div class="space-y-1 text-[11px] text-[var(--text-secondary)]">
-          <div class="flex justify-between"><span>DATA_REGION:</span><span class="text-[var(--text-primary)] font-bold">ap-south-1 (India)</span></div>
-          <div class="flex justify-between"><span>GROQ_MODEL:</span><span class="text-[var(--text-primary)]">llama-3.3-70b</span></div>
-          <div class="flex justify-between"><span>GEMINI_MODEL:</span><span class="text-[var(--text-primary)]">gemini-2.0-flash</span></div>
-          <div class="flex justify-between"><span>QWEN_MODEL:</span><span class="text-[var(--text-primary)]">adaption_qwen3_5_4b</span></div>
-          <div class="flex justify-between"><span>LOCAL_PLACEHOLDER:</span><span id="env-placeholder-val" class="text-emerald-600 font-bold">enabled</span></div>
-          <div class="flex justify-between"><span>AUDIT_RETENTION:</span><span class="text-[var(--text-primary)]">2555 days</span></div>
-        </div>
-      </div>
-
-      <!-- Quick Endpoint Action Pings -->
-      <div class="space-y-2">
-        <p class="font-sans font-semibold text-xs text-[var(--text-primary)]">Endpoint Connectivity Pings</p>
-        <div class="grid grid-cols-2 gap-2">
-          <button id="ping-health" class="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-left flex items-center justify-between">
-            <span>GET /health</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800">200 OK</span>
-          </button>
-          <button id="ping-ready" class="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-left flex items-center justify-between">
-            <span>GET /ready</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800">Ready</span>
-          </button>
-          <button id="ping-tutor" class="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-left flex items-center justify-between col-span-2">
-            <span>POST /dev/tutor/chat (Green)</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">Test</span>
-          </button>
-          <button id="ping-preprocess" class="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-left flex items-center justify-between col-span-2">
-            <span>POST /preprocess (Multipart OCR)</span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">Test</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Real-time Event Logs -->
-      <div class="space-y-2">
-        <div class="flex items-center justify-between">
-          <p class="font-sans font-semibold text-xs text-[var(--text-primary)]">Live Network Telemetry</p>
-          <button id="btn-clear-logs" class="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">Clear</button>
-        </div>
-        <div id="inspector-log-list" class="space-y-2 max-h-72 overflow-y-auto">
-          <!-- Log entries injected here -->
-        </div>
-      </div>
-    </div>
-  </aside>
 
   <!-- Notification Toast Container -->
   <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>

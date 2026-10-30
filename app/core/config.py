@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     process_log_pseudonym_key: SecretStr | None = Field(
         default=None, validation_alias="PROCESS_LOG_PSEUDONYM_KEY"
     )
+    auth_signing_key: SecretStr | None = Field(default=None, validation_alias="AUTH_SIGNING_KEY")
 
     groq_base_url: str = Field(
         default="https://api.groq.com/openai/v1", validation_alias="GROQ_BASE_URL"
@@ -122,8 +123,26 @@ class Settings(BaseSettings):
     @field_validator("process_log_pseudonym_key")
     @classmethod
     def validate_pseudonym_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value():
+            return None
         if value is not None and len(value.get_secret_value().encode("utf-8")) < 32:
             raise ValueError("PROCESS_LOG_PSEUDONYM_KEY must contain at least 32 bytes")
+        return value
+
+    @field_validator("auth_signing_key")
+    @classmethod
+    def validate_auth_signing_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value():
+            return None
+        if value is not None and len(value.get_secret_value().encode("utf-8")) < 32:
+            raise ValueError("AUTH_SIGNING_KEY must contain at least 32 bytes")
+        return value
+
+    @field_validator("postgres_dsn")
+    @classmethod
+    def validate_postgres_dsn(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().strip():
+            return None
         return value
 
     @field_validator("redis_dsn")

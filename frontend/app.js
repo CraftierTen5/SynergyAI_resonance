@@ -5,6 +5,10 @@
 
 import { ResonanceAPI } from './api.js';
 
+const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[char]));
+
 class ResonanceApp {
   constructor() {
     this.api = new ResonanceAPI();
@@ -12,52 +16,13 @@ class ResonanceApp {
     // Application State
     this.state = {
       viewMode: 'desktop', // 'desktop' | 'mobile'
-      currentScreen: 'dashboard', // 'welcome' | 'signup' | 'dashboard' | 'tutor' | 'steps' | 'policy' | 'settings' | 'viva'
+      currentScreen: 'welcome', // 'welcome' | 'signup' | 'dashboard' | 'tutor' | 'steps' | 'policy' | 'settings' | 'viva'
       theme: 'light',
-      activeAssignmentId: 'demo-green',
+      activeAssignmentId: null,
       assignments: [],
-      user: {
-        name: 'Ananya Sharma',
-        email: 'ananya.sharma@iit.ac.in',
-        studentId: '2024CSB1042',
-        institution: 'Indian Institute of Technology Delhi',
-        department: 'Computer Science & Engineering',
-        year: 'Year 3 (Semester 5)',
-        role: 'Student',
-      },
-      chatMessages: [
-        {
-          id: 'msg-1',
-          sender: 'student',
-          time: '10:42 AM',
-          text: "I'm stuck on recursion for binary trees. How do I know when the base case should return 0 vs None?",
-          attachment: null,
-        },
-        {
-          id: 'msg-2',
-          sender: 'tutor',
-          time: '10:43 AM',
-          headline: "Recursion is a smaller version of the same problem.",
-          body: "When approaching tree recursion, the base case represents the boundary condition when you can go no further — specifically, an empty subtree (node is None). The return value depends entirely on what your recursive contract expects:",
-          cards: [
-            {
-              title: "Base Case: Return 0",
-              subtitle: "When computing scalar values like count, tree depth, node sum, or path cost.",
-              code: "if not node:\n    return 0",
-            },
-            {
-              title: "Base Case: Return None",
-              subtitle: "When constructing, modifying, or returning a node pointer or subtree reference.",
-              code: "if not node:\n    return None",
-            },
-          ],
-          reflectiveQuestion: "What question does your recursive function need to answer for an empty leaf in this problem?",
-          stepLabel: "Step 1 of 3: Identify Return Type",
-          actionTaken: "EXPLAIN_CONCEPT",
-          intent: "CONCEPT_EXPLANATION",
-        },
-      ],
-      currentStep: 1,
+      user: null,
+      chatMessages: [],
+      currentStep: 0,
       disclosureAcknowledged: false,
       selectedLanguage: 'en',
       socraticDepth: 'guided',
@@ -79,16 +44,13 @@ class ResonanceApp {
     this.updateClock();
     setInterval(() => this.updateClock(), 30000);
 
-    // Initial backend fetch
     try {
-      this.state.assignments = await this.api.getAssignments();
-      const readyState = await this.api.checkReady();
-      const elPlaceholder = document.getElementById('env-placeholder-val');
-      if (elPlaceholder && readyState.dependencies) {
-        elPlaceholder.textContent = readyState.dependencies.local_placeholder || 'enabled';
-      }
+      this.state.user = await this.api.currentUser();
+      this.state.currentScreen = this.state.user ? 'dashboard' : 'welcome';
+      if (this.state.user) this.state.assignments = await this.api.getAssignments();
+      this.updateProfile();
     } catch (e) {
-      console.warn("Using offline fixtures:", e);
+      console.warn("Backend initialization failed:", e);
     }
 
     this.render();
@@ -98,16 +60,18 @@ class ResonanceApp {
   // Global Event Binding
   // ========================================================================
   bindGlobalEvents() {
-    // Mode Switcher (Desktop ↔ Mobile)
-    const btnDesktop = document.getElementById('view-mode-desktop');
-    const btnMobile = document.getElementById('view-mode-mobile');
-    
-    btnDesktop?.addEventListener('click', () => this.setViewMode('desktop'));
-    btnMobile?.addEventListener('click', () => this.setViewMode('mobile'));
-
     // Theme Toggle
     document.getElementById('btn-theme-toggle')?.addEventListener('click', () => {
       this.toggleTheme();
+    });
+
+    document.getElementById('btn-profile-menu')?.addEventListener('click', () => {
+      if (!this.state.user) {
+        this.navigateTo('welcome');
+        this.showToast('Sign in to view your workspace settings.', 'info');
+        return;
+      }
+      this.navigateTo('settings');
     });
 
     // Navigation Items
@@ -125,56 +89,22 @@ class ResonanceApp {
 
     // Start New Inquiry Button
     document.getElementById('btn-new-inquiry')?.addEventListener('click', () => {
-      this.state.activeAssignmentId = 'demo-green';
+      this.state.activeAssignmentId = this.state.assignments[0]?.assignment_id || null;
+      if (!this.state.activeAssignmentId) {
+        this.showToast('Add an assignment before starting an inquiry.', 'error');
+        return;
+      }
       this.navigateTo('tutor');
     });
 
     // Switch to Welcome / Sign-in screen demo
     document.getElementById('btn-show-welcome-screen')?.addEventListener('click', () => {
+      this.api.setToken(null);
+      this.state.user = null;
+      this.state.assignments = [];
+      this.updateProfile();
       this.navigateTo('welcome');
     });
-
-    // Endpoints Inspector Drawer
-    const drawer = document.getElementById('inspector-drawer');
-    document.getElementById('btn-open-inspector')?.addEventListener('click', () => {
-      drawer?.classList.remove('translate-x-full');
-    });
-    document.getElementById('btn-close-inspector')?.addEventListener('click', () => {
-      drawer?.classList.add('translate-x-full');
-    });
-
-    // API Inspector Pings
-    document.getElementById('ping-health')?.addEventListener('click', async () => {
-      const res = await this.api.checkHealth();
-      this.showToast(res.ok ? "Health Check: OK (200)" : "Health: Offline", res.ok ? "success" : "error");
-    });
-    document.getElementById('ping-ready')?.addEventListener('click', async () => {
-      const res = await this.api.checkReady();
-      this.showToast(`Ready Check: ${res.status}`, "info");
-    });
-    document.getElementById('ping-tutor')?.addEventListener('click', async () => {
-      this.showToast("Testing /dev/tutor/chat...", "info");
-      const res = await this.api.sendTutorMessage({
-        assignmentId: 'demo-green',
-        message: 'Explain recursion base cases',
-      });
-      this.showToast(`Tutor API Response: ${res.data.status || 'OK'}`, "success");
-    });
-    document.getElementById('ping-preprocess')?.addEventListener('click', async () => {
-      this.showToast("Testing /preprocess OCR & normalizer...", "info");
-      const res = await this.api.preprocessInput({
-        text: 'How do binary trees work?',
-        assignmentId: 'demo-green',
-      });
-      this.showToast(`Preprocess: Policy ${res.data.policy?.policy_flag || 'OK'}`, "success");
-    });
-
-    document.getElementById('btn-clear-logs')?.addEventListener('click', () => {
-      this.api.logs = [];
-      this.renderInspectorLogs();
-    });
-
-    this.api.onLog(() => this.renderInspectorLogs());
 
     // Disclose Modal Events
     document.getElementById('btn-close-disclose')?.addEventListener('click', () => this.hideModal('modal-disclose'));
@@ -194,37 +124,6 @@ class ResonanceApp {
       this.hideModal('modal-receipt');
       this.navigateTo('viva');
     });
-  }
-
-  // ========================================================================
-  // Viewport & Mode Management
-  // ========================================================================
-  setViewMode(mode) {
-    this.state.viewMode = mode;
-    const desktopContainer = document.getElementById('desktop-container');
-    const mobileContainer = document.getElementById('mobile-container');
-    const btnDesktop = document.getElementById('view-mode-desktop');
-    const btnMobile = document.getElementById('view-mode-mobile');
-
-    if (mode === 'mobile') {
-      desktopContainer?.classList.add('hidden');
-      mobileContainer?.classList.remove('hidden');
-
-      btnMobile?.classList.add('bg-[var(--bg-surface)]', 'text-[var(--text-primary)]', 'shadow-sm');
-      btnMobile?.classList.remove('text-[var(--text-secondary)]');
-      btnDesktop?.classList.remove('bg-[var(--bg-surface)]', 'text-[var(--text-primary)]', 'shadow-sm');
-      btnDesktop?.classList.add('text-[var(--text-secondary)]');
-    } else {
-      mobileContainer?.classList.add('hidden');
-      desktopContainer?.classList.remove('hidden');
-
-      btnDesktop?.classList.add('bg-[var(--bg-surface)]', 'text-[var(--text-primary)]', 'shadow-sm');
-      btnDesktop?.classList.remove('text-[var(--text-secondary)]');
-      btnMobile?.classList.remove('bg-[var(--bg-surface)]', 'text-[var(--text-primary)]', 'shadow-sm');
-      btnMobile?.classList.add('text-[var(--text-secondary)]');
-    }
-
-    this.render();
   }
 
   toggleTheme() {
@@ -272,6 +171,18 @@ class ResonanceApp {
     });
 
     this.render();
+  }
+
+  updateProfile() {
+    const fullName = this.state.user?.full_name?.trim() || '';
+    const firstName = fullName.split(/\s+/)[0] || '';
+    const profileName = document.getElementById('profile-name');
+    const profileStatus = document.getElementById('profile-status');
+    const initials = document.getElementById('profile-initials');
+
+    if (profileName) profileName.textContent = fullName || 'Guest';
+    if (profileStatus) profileStatus.textContent = fullName ? 'Signed in' : 'Not signed in';
+    if (initials) initials.textContent = firstName ? firstName.slice(0, 2).toUpperCase() : 'TS';
   }
 
   showModal(id) {
@@ -367,15 +278,16 @@ class ResonanceApp {
 
         <div class="relative z-10 w-full max-w-md bg-[var(--bg-surface)] text-[var(--text-primary)] rounded-2xl p-7 shadow-2xl border border-[var(--border-subtle)] space-y-6 animate-fade-in">
           <div>
-            <span class="text-[10px] font-mono uppercase tracking-widest text-[var(--sage-primary)] font-semibold">WELCOME BACK</span>
-            <h2 class="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight mt-1">Make room for your next aha.</h2>
+            <h2 class="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight mt-1">WELCOME</h2>
             <p class="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">Log in with your institutional credentials to enter your Socratic workspace.</p>
           </div>
 
           <form id="form-signin" class="space-y-4">
             <div class="space-y-1">
-              <label class="block text-xs font-medium text-[var(--text-secondary)]">Institutional Email or Student ID</label>
-              <input type="text" id="input-signin-email" value="ananya.sharma@iit.ac.in" required
+              <label class="block text-xs font-medium text-[var(--text-secondary)]">Institution ID</label>
+              <input type="text" name="institution_id" placeholder="Your institution ID" pattern="[A-Za-z0-9_-]+" maxlength="128" required
+                class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+              <input type="email" id="input-signin-email" name="email" autocomplete="username" placeholder="Email address" required
                 class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--sage-primary)] transition-colors">
             </div>
 
@@ -384,7 +296,7 @@ class ResonanceApp {
                 <label class="font-medium text-[var(--text-secondary)]">Password</label>
                 <a href="#" class="text-[var(--sage-primary)] hover:underline text-[11px]">Forgot password?</a>
               </div>
-              <input type="password" id="input-signin-password" value="••••••••••••" required
+              <input type="password" id="input-signin-password" name="password" autocomplete="current-password" required
                 class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--sage-primary)] transition-colors">
             </div>
 
@@ -423,31 +335,34 @@ class ResonanceApp {
         <div>
           <span class="text-[10px] font-mono uppercase tracking-widest text-[var(--sage-primary)] font-semibold">INSTITUTION ONBOARDING</span>
           <h2 class="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight mt-1">Create your account</h2>
-          <p class="text-xs text-[var(--text-secondary)] mt-1.5">Connect your academic institution for verified Socratic tutoring.</p>
+          <p class="text-xs text-[var(--text-secondary)] mt-1.5">Create an account for your institution workspace.</p>
         </div>
 
         <form id="form-signup" class="space-y-4">
           <div class="space-y-1">
             <label class="block text-xs font-medium text-[var(--text-secondary)]">Full Name</label>
-            <input type="text" value="Ananya Sharma" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+            <input type="text" name="full_name" autocomplete="name" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
           </div>
           <div class="space-y-1">
             <label class="block text-xs font-medium text-[var(--text-secondary)]">Institutional Email (.ac.in / .edu)</label>
-            <input type="email" value="ananya.sharma@iit.ac.in" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+            <input type="email" name="email" autocomplete="email" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-[var(--text-secondary)]">Institution ID (share with teammates)</label>
+            <input type="text" name="institution_id" pattern="[A-Za-z0-9_-]+" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-xs font-medium text-[var(--text-secondary)]">Institution name</label>
+            <input type="text" name="institution_name" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
           </div>
           <div class="space-y-1">
             <label class="block text-xs font-medium text-[var(--text-secondary)]">Academic Department & Code</label>
-            <input type="text" value="Computer Science (IIT Delhi - IITD-CS-2026)" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+            <input type="text" name="department" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
           </div>
           <div class="space-y-1">
             <label class="block text-xs font-medium text-[var(--text-secondary)]">Password</label>
-            <input type="password" value="pass123456" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+            <input type="password" name="password" autocomplete="new-password" minlength="12" required class="w-full text-xs p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
           </div>
-
-          <label class="flex items-start gap-2.5 text-xs text-[var(--text-secondary)] cursor-pointer">
-            <input type="checkbox" checked class="mt-0.5 rounded text-[var(--sage-primary)]">
-            <span>I agree to the Academic Honor Code, Process Log Anonymization, and ap-south-1 Data Residency policy (NFR-PRV-05).</span>
-          </label>
 
           <button type="submit" class="w-full py-3 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white font-medium text-xs shadow-md">
             Create Account & Enter Workspace
@@ -463,167 +378,38 @@ class ResonanceApp {
   }
 
   // ========================================================================
-  // Screen 4: Student Dashboard ("Good afternoon, Ananya.")
+  // Dashboard uses only assignment data returned by the backend.
   // ========================================================================
   renderDashboardScreen() {
+    const assignments = this.state.assignments || [];
     return `
-      <div class="space-y-7 animate-fade-in">
-        <!-- Dashboard Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div class="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">STUDENT WORKSPACE • IIT DELHI</div>
-            <h1 class="font-serif text-3xl sm:text-4xl font-normal text-[var(--text-primary)] tracking-tight mt-0.5">Good afternoon, Ananya.</h1>
-            <p class="text-xs text-[var(--text-secondary)] mt-1">Here is your active learning workspace and assignment policy status.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button id="btn-dash-viva" class="px-4 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-subtle)] text-xs font-medium flex items-center gap-2 shadow-sm transition-colors">
-              <svg class="w-4 h-4 text-[var(--sage-primary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-              <span>Viva Schedule</span>
-            </button>
-            <button id="btn-dash-inquiry" class="px-4 py-2 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-xs font-medium flex items-center gap-2 shadow-sm transition-colors">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span>Ask Socratic Tutor</span>
-            </button>
-          </div>
+      <section class="max-w-4xl mx-auto space-y-5">
+        <div>
+          <h1 class="font-serif text-3xl font-normal">Your workspace</h1>
+          <p class="text-sm text-[var(--text-secondary)]">Assignments returned by the connected backend.</p>
         </div>
-
-        <!-- Upcoming Viva Banner (Figma Screen 4) -->
-        <div class="p-5 rounded-2xl bg-gradient-to-r from-[#4E6652] to-[#3B503E] text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="flex items-start gap-4">
-            <div class="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0 border border-white/20">
-              <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] font-mono uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full font-semibold">ORAL DEFENSE</span>
-                <span class="text-xs text-white/80">Scheduled in 2 days</span>
-              </div>
-              <h3 class="font-serif text-lg font-medium text-white mt-0.5">Upcoming viva: Binary Search Trees & Recursion</h3>
-              <p class="text-xs text-white/70">Prof. R. Sengupta • Scheduled for Nov 2, 2:30 PM IST</p>
-            </div>
-          </div>
-          <button id="btn-practice-viva-banner" class="px-4 py-2.5 rounded-xl bg-white text-[#2D3F31] font-semibold text-xs shadow hover:bg-zinc-100 transition-colors shrink-0">
-            Practice Socratic Viva
-          </button>
-        </div>
-
-        <!-- Filter Tabs -->
-        <div class="flex items-center justify-between border-b border-[var(--border-subtle)] pb-2 text-xs">
-          <div class="flex items-center gap-3">
-            <button class="font-medium text-[var(--sage-primary)] border-b-2 border-[var(--sage-primary)] pb-2 px-1">All Assignments (3)</button>
-            <button class="text-[var(--text-muted)] hover:text-[var(--text-primary)] pb-2 px-1">In Progress (2)</button>
-            <button class="text-[var(--text-muted)] hover:text-[var(--text-primary)] pb-2 px-1">Completed (1)</button>
-          </div>
-          <span class="text-[11px] font-mono text-[var(--text-muted)] hidden sm:inline">Authoritative Policy Guard Active</span>
-        </div>
-
-        <!-- 3 Assignment Cards (Green, Yellow, Red) -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <!-- Card 1: Green (Full Integration) -->
-          <div class="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)] transition-all flex flex-col justify-between shadow-sm space-y-4">
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] font-mono text-[var(--text-muted)]">CS201 • ASSIGNMENT 04</span>
-                <span class="badge-policy-green text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                  FULL INTEGRATION
-                </span>
-              </div>
-              <div>
-                <h3 class="font-serif text-lg font-normal text-[var(--text-primary)]">Recursion & Binary Search Trees</h3>
-                <p class="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">Socratic AI tutoring is fully enabled. Ask conceptual questions, explore edge cases, and receive guided stepped hints.</p>
-              </div>
-            </div>
-
-            <div class="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
-              <div class="flex justify-between items-center text-[11px] text-[var(--text-muted)]">
-                <span>Progress: Step 1 of 3</span>
-                <span>Due in 6 days</span>
-              </div>
-              <button data-open-assignment="demo-green" class="btn-open-workspace w-full py-2.5 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-xs font-medium transition-colors shadow-sm">
-                Open Workspace
-              </button>
-            </div>
-          </div>
-
-          <!-- Card 2: Yellow (Process Disclosure) -->
-          <div class="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)] transition-all flex flex-col justify-between shadow-sm space-y-4">
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] font-mono text-[var(--text-muted)]">CS202 • ASSIGNMENT 03</span>
-                <span class="badge-policy-yellow text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
-                  PROCESS DISCLOSURE
-                </span>
-              </div>
-              <div>
-                <h3 class="font-serif text-lg font-normal text-[var(--text-primary)]">Graph Traversal & Shortest Path</h3>
-                <p class="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">AI assistance is permitted with mandatory disclosure of queries and reflections upon final submission.</p>
-              </div>
-            </div>
-
-            <div class="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
-              <div class="flex justify-between items-center text-[11px] text-[var(--text-muted)]">
-                <span>Disclosure pending</span>
-                <span>Due in 13 days</span>
-              </div>
-              <button data-open-assignment="demo-yellow" class="btn-open-workspace w-full py-2.5 rounded-xl border border-[var(--border-strong)] bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-primary)] text-xs font-medium transition-colors shadow-sm">
-                Open Workspace & Disclose
-              </button>
-            </div>
-          </div>
-
-          <!-- Card 3: Red (No AI / Strict Honor Code) -->
-          <div class="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] hover:border-[var(--border-strong)] transition-all flex flex-col justify-between shadow-sm space-y-4">
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] font-mono text-[var(--text-muted)]">CS304 • FINAL PROJECT</span>
-                <span class="badge-policy-red text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-                  NO AI ALLOWED
-                </span>
-              </div>
-              <div>
-                <h3 class="font-serif text-lg font-normal text-[var(--text-primary)]">Core Cryptographic Primitives</h3>
-                <p class="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">Generative AI assistance is strictly barred for this assessment. Fail-closed policy enforcement active.</p>
-              </div>
-            </div>
-
-            <div class="space-y-3 pt-3 border-t border-[var(--border-subtle)]">
-              <div class="flex justify-between items-center text-[11px] text-[var(--text-muted)]">
-                <span>Independent submission only</span>
-                <span>Due in 21 days</span>
-              </div>
-              <button data-open-assignment="demo-red" class="btn-open-workspace w-full py-2.5 rounded-xl border border-[var(--policy-red-border)] bg-[var(--policy-red-bg)] text-[var(--policy-red-text)] hover:opacity-90 text-xs font-medium transition-opacity">
-                View Policy & Honor Code
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Footer Isolation & Security Note -->
-        <div class="p-4 rounded-xl bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] flex items-center justify-between text-xs text-[var(--text-muted)]">
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>Tenant-isolated storage active. Process logs are pseudonymized before persistence in compliance with NFR-PRV-05 (ap-south-1).</span>
-          </div>
-          <span class="font-mono text-[11px]">Audit: append-only</span>
-        </div>
-      </div>
-    `;
+        <form id="form-create-assignment" class="grid gap-2 sm:grid-cols-3 p-4 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+          <input name="course_code" required placeholder="Course code" class="p-2 rounded-lg border bg-[var(--bg-app)]">
+          <input name="course_title" required placeholder="Course title" class="p-2 rounded-lg border bg-[var(--bg-app)]">
+          <input name="academic_term" required placeholder="Academic term" class="p-2 rounded-lg border bg-[var(--bg-app)]">
+          <input name="title" required placeholder="Assignment title" class="p-2 rounded-lg border bg-[var(--bg-app)]">
+          <select name="policy_level" class="p-2 rounded-lg border bg-[var(--bg-app)]"><option value="GREEN">GREEN</option><option value="YELLOW">YELLOW</option><option value="UNKNOWN">UNKNOWN (maps to YELLOW)</option><option value="RED">RED</option></select>
+          <button class="px-4 py-2 rounded-xl bg-[var(--sage-primary)] text-white text-sm">Add assignment</button>
+        </form>
+        ${assignments.length ? `<div class="grid gap-4 md:grid-cols-2">${assignments.map(a => `
+          <article class="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
+            <p class="text-xs text-[var(--text-muted)]">${escapeHTML(a.course_code)} ${a.policy_level ? `• ${escapeHTML(a.policy_level)}` : ''}</p>
+            <h2 class="font-serif text-xl">${escapeHTML(a.title || 'Untitled assignment')}</h2>
+            <p class="text-sm text-[var(--text-secondary)]">${escapeHTML(a.description)}</p>
+            <button data-open-assignment="${escapeHTML(a.assignment_id)}" class="btn-open-workspace px-4 py-2 rounded-xl bg-[var(--sage-primary)] text-white text-sm">Open workspace</button>
+          </article>`).join('')}</div>` : `<div class="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-sm text-[var(--text-secondary)]">No assignments yet. Add one above to begin.</div>`}
+      </section>`;
   }
-
-  // ========================================================================
-  // Screen 5 & 11: Socratic Tutoring Workspace
-  // ========================================================================
   renderTutorScreen() {
     const aid = this.state.activeAssignmentId;
     const assignment = this.state.assignments.find(a => a.assignment_id === aid) || {
-      assignment_id: 'demo-green',
-      title: 'Recursion & Binary Search Trees',
-      course_code: 'CS201',
-      policy_level: 'GREEN',
-      policy_name: 'FULL INTEGRATION',
+      assignment_id: aid || '', title: 'No assignment selected', course_code: '',
+      policy_level: 'UNKNOWN', policy_name: 'POLICY NOT CONFIGURED',
     };
 
     const isYellow = assignment.policy_level === 'YELLOW';
@@ -665,11 +451,7 @@ class ResonanceApp {
                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 <span>Deposit & Disclose</span>
               </button>
-            ` : `
-              <button id="btn-open-disclose-modal" class="px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-xs font-medium text-[var(--text-secondary)]">
-                Attach Reflection
-              </button>
-            `}
+            ` : ''}
           </div>
         </div>
 
@@ -714,11 +496,6 @@ class ResonanceApp {
               <span>Send</span>
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
-          </div>
-
-          <div class="flex items-center justify-between text-[11px] text-[var(--text-muted)] px-1">
-            <span>Policy: Socratic hints only. Direct answers are withheld to promote deep mastery.</span>
-            <span class="font-mono">POST /dev/tutor/chat</span>
           </div>
         </div>
       </div>
@@ -888,7 +665,7 @@ class ResonanceApp {
                 </li>
                 <li class="flex items-start gap-2">
                   <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span>You must disclose reflection notes upon code deposit.</span>
+                  <span>You must disclose AI assistance upon code deposit.</span>
                 </li>
                 <li class="flex items-start gap-2">
                   <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -896,9 +673,6 @@ class ResonanceApp {
                 </li>
               </ul>
             </div>
-            <button data-test-policy="demo-yellow" class="btn-test-policy w-full py-2.5 rounded-xl border border-[var(--policy-yellow-border)] bg-[var(--policy-yellow-bg)] text-[var(--policy-yellow-text)] hover:opacity-90 text-xs font-medium transition-opacity">
-              Test Yellow Policy Gate
-            </button>
           </div>
 
           <!-- Column 2: Red (Restricted / No AI) -->
@@ -924,9 +698,6 @@ class ResonanceApp {
                 </li>
               </ul>
             </div>
-            <button data-test-policy="demo-red" class="btn-test-policy w-full py-2.5 rounded-xl border border-[var(--policy-red-border)] bg-[var(--policy-red-bg)] text-[var(--policy-red-text)] hover:opacity-90 text-xs font-medium transition-opacity">
-              Test Red Fail-Closed Guard
-            </button>
           </div>
 
           <!-- Column 3: Green (Full Integration) -->
@@ -952,9 +723,6 @@ class ResonanceApp {
                 </li>
               </ul>
             </div>
-            <button data-test-policy="demo-green" class="btn-test-policy w-full py-2.5 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-xs font-medium transition-colors shadow-sm">
-              Test Green Socratic Tutoring
-            </button>
           </div>
         </div>
       </div>
@@ -965,51 +733,48 @@ class ResonanceApp {
   // Screen 3 & 12: Workspace & Profile Settings
   // ========================================================================
   renderSettingsScreen() {
+    const user = this.state.user;
+    const fullName = user?.full_name || '';
+    const firstName = fullName.trim().split(/\s+/)[0] || '';
+    const initials = firstName ? firstName.slice(0, 2).toUpperCase() : 'TS';
+
     return `
       <div class="space-y-6 animate-fade-in max-w-4xl mx-auto">
-        <div class="flex items-center justify-between">
+        <div>
           <div>
             <div class="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">PREFERENCES & PRIVACY</div>
-            <h1 class="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight mt-0.5">A workspace that feels like you.</h1>
-            <p class="text-xs text-[var(--text-secondary)] mt-1">Manage your student profile, learning preferences, and privacy controls.</p>
+            <h1 class="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight mt-0.5">Workspace Settings</h1>
+            <p class="text-xs text-[var(--text-secondary)] mt-1">Your account details are loaded from the information saved when you registered.</p>
           </div>
-          <button id="btn-save-settings" class="px-5 py-2.5 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-xs font-medium shadow-sm transition-colors">
-            Save Preferences
-          </button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <!-- Profile Card -->
           <div class="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-sm space-y-4 md:col-span-2">
-            <h3 class="font-serif text-lg font-normal text-[var(--text-primary)]">Student Profile</h3>
+            <h3 class="font-serif text-lg font-normal text-[var(--text-primary)]">Registration Details</h3>
             <div class="flex items-center gap-4 pb-3 border-b border-[var(--border-subtle)]">
               <div class="w-14 h-14 rounded-full bg-[var(--sage-badge)] text-[var(--sage-badge-text)] flex items-center justify-center font-serif text-xl font-medium">
-                AS
+                ${escapeHTML(initials)}
               </div>
               <div>
-                <h4 class="font-medium text-sm text-[var(--text-primary)]">Ananya Sharma</h4>
-                <p class="text-xs text-[var(--text-secondary)]">B.Tech Computer Science & Engineering • Year 3</p>
-                <p class="text-[11px] font-mono text-[var(--text-muted)]">ID: 2024CSB1042 • IIT Delhi</p>
+                <h4 class="font-medium text-sm text-[var(--text-primary)]">${escapeHTML(fullName || 'Guest')}</h4>
+                <p class="text-xs text-[var(--text-secondary)]">Registered account information</p>
               </div>
             </div>
 
-            <!-- Learning Style Selection -->
-            <div class="space-y-3 pt-1">
-              <h4 class="text-xs font-semibold text-[var(--text-primary)]">Tutoring & Socratic Guidance Style</h4>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button class="p-3 rounded-xl border border-[var(--sage-primary)] bg-[var(--sage-primary-light)] text-left space-y-1">
-                  <span class="text-xs font-semibold text-[var(--sage-primary)] block">Stepped Discovery</span>
-                  <span class="text-[10px] text-[var(--text-secondary)] leading-normal">Hints revealed progressively after student reflection.</span>
-                </button>
-                <button class="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] hover:border-[var(--border-strong)] text-left space-y-1">
-                  <span class="text-xs font-semibold text-[var(--text-primary)] block">Concept Invariants</span>
-                  <span class="text-[10px] text-[var(--text-secondary)] leading-normal">Focuses on invariants and edge case proofs.</span>
-                </button>
-                <button class="p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] hover:border-[var(--border-strong)] text-left space-y-1">
-                  <span class="text-xs font-semibold text-[var(--text-primary)] block">Viva Rehearsal</span>
-                  <span class="text-[10px] text-[var(--text-secondary)] leading-normal">Probing oral defense questions.</span>
-                </button>
-              </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="space-y-1 text-xs text-[var(--text-secondary)]">
+                <span>Full name</span>
+                <input readonly value="${escapeHTML(fullName)}" placeholder="Not provided" class="w-full p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+              </label>
+              <label class="space-y-1 text-xs text-[var(--text-secondary)]">
+                <span>Email address</span>
+                <input readonly value="${escapeHTML(user?.email || '')}" placeholder="Not available" class="w-full p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+              </label>
+              <label class="space-y-1 text-xs text-[var(--text-secondary)] sm:col-span-2">
+                <span>Department</span>
+                <input readonly value="${escapeHTML(user?.department || '')}" placeholder="Not provided" class="w-full p-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+              </label>
             </div>
 
             <!-- Privacy & Compliance Controls -->
@@ -1041,26 +806,17 @@ class ResonanceApp {
             </div>
           </div>
 
-          <!-- Institution Details & Guarantee -->
-          <div class="space-y-5">
+          <!-- Institution Details -->
+          <div>
             <div class="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3 text-xs">
               <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--text-muted)]">INSTITUTION AFFILIATION</span>
               <div>
-                <h4 class="font-semibold text-sm text-[var(--text-primary)]">IIT Delhi</h4>
-                <p class="text-xs text-[var(--text-secondary)]">Academic Year 2026-27 • Semester 5</p>
-                <p class="text-[11px] font-mono text-[var(--text-muted)] mt-1">Tenant ID: 1697686969648</p>
+                <h4 class="font-semibold text-sm text-[var(--text-primary)]">${escapeHTML(user?.institution_name || 'Institution not available')}</h4>
+                <p class="text-xs text-[var(--text-secondary)]">${escapeHTML(user?.email || 'No signed-in account')}</p>
+                <p class="text-[11px] font-mono text-[var(--text-muted)] mt-1">Institution ID: ${escapeHTML(user?.institution_id || 'unavailable')}</p>
               </div>
             </div>
 
-            <div class="p-5 rounded-2xl bg-[var(--sage-primary-light)] border border-[var(--sage-badge)] space-y-2 text-xs">
-              <div class="flex items-center gap-2 text-[var(--sage-primary)] font-semibold">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span>Zero Training Guarantee</span>
-              </div>
-              <p class="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                Student code, reflections, and chat messages are never used to train public or proprietary foundation models. All data is governed under institutional RLS contracts.
-              </p>
-            </div>
           </div>
         </div>
       </div>
@@ -1112,8 +868,14 @@ class ResonanceApp {
     // Welcome Form Sign In
     container.querySelector('#form-signin')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      this.showToast("Signed in successfully to IIT Delhi workspace.", "success");
-      this.navigateTo('dashboard');
+      const data = Object.fromEntries(new FormData(e.currentTarget));
+      this.api.authenticate('login', data).then(async user => {
+        this.state.user = await this.api.currentUser() || user;
+        this.state.assignments = await this.api.getAssignments();
+        this.updateProfile();
+        this.showToast('Signed in.', 'success');
+        this.navigateTo('dashboard');
+      }).catch(error => this.showToast(error.message, 'error'));
     });
 
     // Go to Signup
@@ -1131,13 +893,30 @@ class ResonanceApp {
     // Signup Form Submit
     container.querySelector('#form-signup')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      this.showToast("Account created with verified institutional affiliation.", "success");
-      this.navigateTo('dashboard');
+      const data = Object.fromEntries(new FormData(e.currentTarget));
+      this.api.authenticate('register', data).then(user => {
+        this.state.user = user;
+        this.state.assignments = [];
+        this.updateProfile();
+        this.showToast('Account created.', 'success');
+        this.navigateTo('dashboard');
+      }).catch(error => this.showToast(error.message, 'error'));
+    });
+
+    container.querySelector('#form-create-assignment')?.addEventListener('submit', e => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.currentTarget));
+      if (data.policy_level === 'UNKNOWN') data.policy_level = 'YELLOW';
+      this.api.createAssignment(data).then(assignment => {
+        this.state.assignments.unshift(assignment);
+        this.showToast('Assignment added.', 'success');
+        this.render();
+      }).catch(error => this.showToast(error.message, 'error'));
     });
 
     // Dashboard quick buttons
     container.querySelector('#btn-dash-inquiry')?.addEventListener('click', () => {
-      this.state.activeAssignmentId = 'demo-green';
+      this.state.activeAssignmentId = this.state.assignments[0]?.assignment_id || null;
       this.navigateTo('tutor');
     });
 
@@ -1154,7 +933,8 @@ class ResonanceApp {
       btn.addEventListener('click', (e) => {
         const aid = e.currentTarget.getAttribute('data-open-assignment');
         this.state.activeAssignmentId = aid;
-        if (aid === 'demo-red') {
+        const assignment = this.state.assignments.find(item => item.assignment_id === aid);
+        if (assignment?.policy_level === 'RED') {
           this.navigateTo('policy');
         } else {
           this.navigateTo('tutor');
@@ -1298,17 +1078,13 @@ class ResonanceApp {
       this.navigateTo('tutor');
     });
 
-    // Save Settings
-    container.querySelector('#btn-save-settings')?.addEventListener('click', () => {
-      this.showToast("Settings and privacy controls saved successfully.", "success");
-    });
   }
 
   // ========================================================================
   // Handle Disclosure Form Submission (Screen 8 -> Screen 9)
   // ========================================================================
   async handleDisclosureSubmit() {
-    const reflection = document.getElementById('disclose-reflection-input')?.value || "Analyzed base case vs None return types.";
+    const reflection = 'No reflection notes attached.';
     
     this.hideModal('modal-disclose');
     this.showToast("Cryptographically signing submission...", "info");
@@ -1320,44 +1096,22 @@ class ResonanceApp {
       honorCodeAgreed: true,
     });
 
+    if (receipt.status !== 'success') {
+      this.showToast(receipt.message || 'Disclosure request failed.', 'error');
+      return;
+    }
+
     this.state.disclosureAcknowledged = true;
 
     // Populate Receipt Modal
     const hashEl = document.getElementById('receipt-hash');
     const timeEl = document.getElementById('receipt-timestamp');
-    if (hashEl) hashEl.textContent = receipt.verification_hash;
+    if (hashEl) hashEl.textContent = receipt.verification_hash || 'Unavailable';
     if (timeEl) timeEl.textContent = receipt.timestamp;
 
     this.showModal('modal-receipt');
   }
 
-  // ========================================================================
-  // Render API Inspector Live Logs
-  // ========================================================================
-  renderInspectorLogs() {
-    const container = document.getElementById('inspector-log-list');
-    if (!container) return;
-
-    if (this.api.logs.length === 0) {
-      container.innerHTML = `<div class="text-[11px] text-[var(--text-muted)] italic">No network events yet. Pings will appear here.</div>`;
-      return;
-    }
-
-    container.innerHTML = this.api.logs.map(log => `
-      <div class="p-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-app)] space-y-1">
-        <div class="flex items-center justify-between text-[11px]">
-          <span class="font-bold ${log.status >= 200 && log.status < 300 ? 'text-emerald-600' : 'text-amber-600'}">
-            ${log.method} ${log.endpoint}
-          </span>
-          <span class="text-[10px] text-[var(--text-muted)]">${log.durationMs}ms</span>
-        </div>
-        <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-          <span>Status: ${log.status || 'OK'}</span>
-          <span>${log.timestamp.split('T')[1].slice(0, 8)}</span>
-        </div>
-      </div>
-    `).join('');
-  }
 }
 
 // Instantiate application on DOM ready

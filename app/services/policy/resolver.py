@@ -13,6 +13,24 @@ _FLAGS = {
 }
 
 
+def _unknown_policy(
+    *,
+    policy_source: str | None,
+    policy_evidence: Sequence[PolicyEvidence],
+    requires_human_review: bool,
+    resolution_reason: str,
+) -> PolicyResolution:
+    """Use guided assistance as the effective policy when resolution is unknown."""
+    return PolicyResolution(
+        policy_flag="YELLOW",
+        canonical_policy="PROCESS_DISCLOSURE",
+        policy_source=policy_source,
+        policy_evidence=list(policy_evidence),
+        requires_human_review=requires_human_review,
+        resolution_reason=resolution_reason,
+    )
+
+
 def resolve_policy(
     *, assignment_id: str | None,
     authoritative_records: Sequence[Mapping[str, object]] | None = (),
@@ -24,11 +42,11 @@ def resolve_policy(
         for record in authoritative_records:
             raw = record.get("policy") or record.get("policy_level") or record.get("canonical_policy")
             if not isinstance(raw, str) or raw.strip().upper() not in _FLAGS:
-                return PolicyResolution(policy_flag="UNKNOWN", policy_source="assignment", policy_evidence=list(evidence), requires_human_review=True, resolution_reason="POLICY_CONFLICT")
+                return _unknown_policy(policy_source="assignment", policy_evidence=evidence, requires_human_review=True, resolution_reason="POLICY_CONFLICT")
             flag, canonical = _FLAGS[raw.strip().upper()]
             scope = record.get("scope")
             if scope is not None and str(scope).strip().lower() not in {"assignment", "assignment_wide"}:
-                return PolicyResolution(policy_flag="UNKNOWN", policy_source="assignment", policy_evidence=list(evidence), requires_human_review=True, resolution_reason="POLICY_SCOPE_UNCLEAR")
+                return _unknown_policy(policy_source="assignment", policy_evidence=evidence, requires_human_review=True, resolution_reason="POLICY_SCOPE_UNCLEAR")
             parsed.append((flag, canonical, record))
         signatures = {
             (flag, canonical, tuple(sorted(str(value) for value in record.get("required_conditions", [])))
@@ -37,7 +55,7 @@ def resolve_policy(
             for flag, canonical, record in parsed
         }
         if len(signatures) != 1:
-            return PolicyResolution(policy_flag="UNKNOWN", policy_source="assignment", policy_evidence=list(evidence), requires_human_review=True, resolution_reason="POLICY_CONFLICT")
+            return _unknown_policy(policy_source="assignment", policy_evidence=evidence, requires_human_review=True, resolution_reason="POLICY_CONFLICT")
         flag, canonical, record = parsed[0]
         return PolicyResolution(
             policy_flag=flag, canonical_policy=canonical, policy_source="assignment",
@@ -46,6 +64,6 @@ def resolve_policy(
             required_conditions=[str(value) for value in record.get("required_conditions", [])] if isinstance(record.get("required_conditions", []), list) else [],
         )
     if any(item.ambiguous or item.requires_human_review for item in evidence):
-        return PolicyResolution(policy_flag="UNKNOWN", policy_source="extracted_evidence", policy_evidence=list(evidence), requires_human_review=True, resolution_reason="POLICY_EXTRACTION_UNCERTAIN")
+        return _unknown_policy(policy_source="extracted_evidence", policy_evidence=evidence, requires_human_review=True, resolution_reason="POLICY_EXTRACTION_UNCERTAIN")
     reason = "ASSIGNMENT_NOT_FOUND" if assignment_id and authoritative_records is None else ("POLICY_NOT_FOUND" if assignment_id or not evidence else "POLICY_SCOPE_UNCLEAR")
-    return PolicyResolution(policy_flag="UNKNOWN", policy_source="extracted_evidence" if evidence else None, policy_evidence=list(evidence), requires_human_review=bool(evidence), resolution_reason=reason)
+    return _unknown_policy(policy_source="extracted_evidence" if evidence else None, policy_evidence=evidence, requires_human_review=bool(evidence), resolution_reason=reason)
