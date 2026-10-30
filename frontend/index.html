@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ResonanceAI — A Calm, Guided Space for Thought & Inquiry</title>
+  
+  <!-- Typography from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..500&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS via CDN for rapid utility classes -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: ['selector', '[data-theme="dark"]'],
+      theme: {
+        extend: {
+          colors: {
+            sage: {
+              50: '#F4F7F4',
+              100: '#E5EDE7',
+              200: '#D1DFD6',
+              300: '#ABC1B2',
+              400: '#87A38F',
+              500: '#65836E',
+              600: '#4E6B56',
+              700: '#3D5444',
+              800: '#2A3C2F',
+              900: '#17241A',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom Design Tokens & Mobile Mockup Styles -->
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="min-h-screen flex flex-col bg-[var(--bg-app)] text-[var(--text-primary)] antialiased select-none-text">
+
+  <!-- ========================================================================
+       TOP GLOBAL NAVBAR
+       ======================================================================== -->
+  <header class="h-16 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 transition-colors">
+    <!-- Brand Title & Tagline -->
+    <div class="flex items-center gap-3">
+      <button id="btn-brand" class="flex items-center gap-2.5 focus:outline-none group">
+        <div class="w-8 h-8 rounded-lg bg-[var(--sage-primary)] text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+          <!-- Resonance Wave Motif SVG -->
+          <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12h2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H2v-6Z"/>
+            <path d="M6 8h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6V8Z"/>
+            <path d="M10 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2V4Z"/>
+            <path d="M14 7h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2V7Z"/>
+            <path d="M18 11h2a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2v-8Z"/>
+          </svg>
+        </div>
+        <div class="text-left">
+          <div class="font-serif text-lg font-medium tracking-tight text-[var(--text-primary)] flex items-center gap-1.5">
+            ResonanceAI
+          </div>
+          <p class="text-[10px] font-mono text-[var(--text-muted)] tracking-wider">ACADEMIC TUTORING</p>
+        </div>
+      </button>
+    </div>
+    <!-- Right Controls: Theme and User Profile -->
+    <div class="flex items-center gap-2.5">
+      <!-- Theme Switcher -->
+      <button id="btn-theme-toggle" class="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)] transition-colors" title="Toggle Light/Dark Theme">
+        <svg id="icon-sun" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <svg id="icon-moon" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
+
+      <!-- Student Profile Pill -->
+      <button id="btn-profile-menu" title="Open workspace settings" aria-label="Open workspace settings" class="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] transition-colors">
+        <div id="profile-initials" class="w-7 h-7 rounded-full bg-[var(--sage-badge)] text-[var(--sage-badge-text)] font-semibold text-xs flex items-center justify-center">
+          TS
+        </div>
+        <div class="text-left hidden sm:block">
+          <p id="profile-name" class="text-xs font-medium leading-none text-[var(--text-primary)]">Guest</p>
+          <p id="profile-status" class="text-[10px] text-[var(--text-muted)] font-mono leading-tight">Not signed in</p>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       DESKTOP VIEW CONTAINER (Full layout with Left Sidebar)
+       ======================================================================== -->
+  <div id="desktop-container" class="flex flex-1 w-full min-h-[calc(100vh-64px)]">
+    
+    <!-- Left Navigation Sidebar -->
+    <aside id="desktop-sidebar" class="w-64 border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 flex flex-col justify-between shrink-0 transition-colors">
+      <div class="space-y-6">
+        <!-- New Inquiry Action Button -->
+        <button id="btn-new-inquiry" class="w-full py-2.5 px-4 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-sm font-medium flex items-center justify-center gap-2 shadow-sm transition-all transform active:scale-95">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>Start Learning</span>
+        </button>
+
+        <!-- Navigation Links -->
+        <nav class="space-y-1">
+          <button data-nav="dashboard" class="nav-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--sage-primary)] bg-[var(--sage-primary-light)]">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            <span>Dashboard</span>
+          </button>
+          <button data-nav="tutor" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Tutor Workspace</span>
+          </button>
+          <button data-nav="policy" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Transparency Matrix</span>
+          </button>
+          <button data-nav="viva" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)] hover:text-[var(--text-primary)]">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+            <span>Viva Preparation</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Sign out -->
+      <div class="border-t border-[var(--border-subtle)] pt-4 space-y-3">
+        <button id="btn-show-welcome-screen" class="w-full text-xs font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-between px-2 py-1.5 rounded hover:bg-[var(--bg-surface-subtle)]">
+          <span>Sign out</span>
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Desktop Screen Viewport -->
+    <main id="desktop-main-content" class="flex-1 overflow-y-auto p-6 sm:p-8">
+      <!-- Dynamic Views will be injected here by app.js -->
+      <div id="screen-mount" class="max-w-6xl mx-auto"></div>
+    </main>
+  </div>
+
+  <!-- ========================================================================
+       MOBILE VIEW CONTAINER (Realistic iPhone Mockup Shell)
+       ======================================================================== -->
+  <div id="mobile-container" class="hidden mobile-device-wrapper">
+    <div class="mobile-device-shell">
+      <!-- Status Bar with Time, Battery, and Dynamic Island -->
+      <div class="mobile-status-bar text-[var(--text-primary)]">
+        <span id="mobile-clock">9:41</span>
+        <div class="dynamic-island">
+          <div class="dynamic-island-lens"></div>
+          <div class="dynamic-island-sensor"></div>
+        </div>
+        <div class="flex items-center gap-1.5 text-xs">
+          <span>5G</span>
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17 6h-2V5c0-.55-.45-1-1-1h-4c-.55 0-1 .45-1 1v1H7c-.55 0-1 .45-1 1v12c0 .55.45 1 1 1h10c.55 0 1-.45 1-1V7c0-.55-.45-1-1-1zm-1 12H8V8h8v10z"/></svg>
+        </div>
+      </div>
+
+      <!-- Mobile Content Viewport -->
+      <div id="mobile-screen-mount" class="mobile-content-viewport p-4"></div>
+
+      <!-- Mobile Bottom Tab Navigation -->
+      <nav id="mobile-tab-bar" class="h-16 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 flex items-center justify-around z-20 shrink-0">
+        <button data-nav="dashboard" class="mobile-tab-item active flex flex-col items-center gap-1 text-[var(--sage-primary)]">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <span class="text-[10px] font-medium">Home</span>
+        </button>
+        <button data-nav="tutor" class="mobile-tab-item flex flex-col items-center gap-1 text-[var(--text-muted)]">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="text-[10px] font-medium">Tutor</span>
+        </button>
+        <button data-nav="policy" class="mobile-tab-item flex flex-col items-center gap-1 text-[var(--text-muted)]">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="text-[10px] font-medium">Policy</span>
+        </button>
+      </nav>
+
+      <!-- Bottom Home Indicator Bar -->
+      <div class="mobile-home-indicator"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODALS: DISCLOSURE (Screen 8) & AUDIT RECEIPT (Screen 9)
+       ======================================================================== -->
+
+  <!-- Modal 1: Deposit / Disclose Response (Screen 8) -->
+  <div id="modal-disclose" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden animate-fade-in">
+    <div class="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5">
+      <div class="flex items-center justify-between pb-3 border-b border-[var(--border-subtle)]">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-[var(--sage-primary)] font-semibold">Academic Integrity Boundary</span>
+          <h3 class="font-serif text-2xl font-normal text-[var(--text-primary)]">Deposit & Disclose Response</h3>
+        </div>
+        <button id="btn-close-disclose" class="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Assignment Info Pill -->
+      <div class="p-3.5 rounded-xl bg-[var(--policy-yellow-bg)] border border-[var(--policy-yellow-border)] text-xs text-[var(--policy-yellow-text)] space-y-1">
+        <div class="flex items-center gap-2 font-semibold">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="disclose-assignment-title">No assignment selected</span>
+        </div>
+        <p class="leading-relaxed">Policy requires transparent disclosure of AI assistance prior to repository submission.</p>
+      </div>
+
+      <!-- Integrity Criteria Checkboxes -->
+      <div class="space-y-3 text-xs">
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" id="check-crit-1" checked class="mt-0.5 rounded text-[var(--sage-primary)] focus:ring-[var(--sage-primary)]">
+          <span class="text-[var(--text-secondary)]">I used ResonanceAI to understand conceptual foundations (e.g. queue state transitions & edge relaxation).</span>
+        </label>
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" id="check-crit-2" checked class="mt-0.5 rounded text-[var(--sage-primary)] focus:ring-[var(--sage-primary)]">
+          <span class="text-[var(--text-secondary)]">I wrote the final implementation and test cases independently without copying direct generative solutions.</span>
+        </label>
+        <label class="flex items-start gap-2.5 cursor-pointer">
+          <input type="checkbox" id="check-crit-3" checked class="mt-0.5 rounded text-[var(--sage-primary)] focus:ring-[var(--sage-primary)]">
+          <span class="text-[var(--text-secondary)]">I acknowledge that pseudonymized interaction logs will be hash-chained and attached to my submission receipt.</span>
+        </label>
+      </div>
+
+
+      <!-- Actions -->
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-[var(--border-subtle)]">
+        <button id="btn-cancel-disclose" class="px-4 py-2 text-xs font-medium rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-surface-subtle)]">Cancel</button>
+        <button id="btn-submit-disclose" class="px-5 py-2.5 text-xs font-medium rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white shadow-sm flex items-center gap-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Submit & Sign (SHA-256)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Verification & Receipt (Screen 9) -->
+  <div id="modal-receipt" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden animate-fade-in">
+    <div class="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl w-full max-w-md p-6 shadow-2xl text-center space-y-5">
+      <div class="w-14 h-14 rounded-full bg-[var(--policy-green-bg)] text-[var(--policy-green-text)] flex items-center justify-center mx-auto border border-[var(--policy-green-border)]">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+
+      <div class="space-y-1">
+        <h3 class="font-serif text-2xl font-normal text-[var(--text-primary)]">Thank you for speaking up.</h3>
+        <p class="text-xs text-[var(--text-secondary)]">Your disclosure has been recorded in the immutable audit trail with cryptographic hash chaining.</p>
+      </div>
+
+      <!-- Receipt Data Card -->
+      <div class="p-4 rounded-xl bg-[var(--bg-app)] border border-[var(--border-subtle)] text-left space-y-2.5 text-xs font-mono">
+        <div>
+          <span class="text-[10px] text-[var(--text-muted)] block">VERIFICATION HASH (SHA-256)</span>
+          <span id="receipt-hash" class="text-[var(--text-primary)] font-medium break-all text-[11px]">7f4a2c918e9bd41a6b0c2e3518f8e02d...</span>
+        </div>
+        <div class="flex justify-between border-t border-[var(--border-subtle)] pt-2 text-[11px]">
+          <span class="text-[var(--text-muted)]">TIMESTAMP:</span>
+          <span id="receipt-timestamp" class="text-[var(--text-secondary)]">2026-10-30T01:05:00Z</span>
+        </div>
+        <div class="flex justify-between border-t border-[var(--border-subtle)] pt-2 text-[11px]">
+          <span class="text-[var(--text-muted)]">INSTITUTION:</span>
+          <span class="text-[var(--text-secondary)]">Institution unavailable</span>
+        </div>
+        <div class="flex justify-between border-t border-[var(--border-subtle)] pt-2 text-[11px]">
+          <span class="text-[var(--text-muted)]">STATUS:</span>
+          <span class="text-[var(--policy-green-text)] font-semibold">APPEND-ONLY COMMITTED</span>
+        </div>
+      </div>
+
+      <div class="pt-2 flex flex-col gap-2">
+        <button id="btn-copy-receipt-hash" class="w-full py-2.5 rounded-xl border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-xs font-medium text-[var(--text-primary)] flex items-center justify-center gap-1.5 transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          <span id="btn-copy-text">Copy Verification Receipt</span>
+        </button>
+        <button id="btn-continue-viva-prep" class="w-full py-2.5 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-xs font-medium shadow-sm transition-colors">
+          Continue to Viva Preparation
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+  <!-- Scripts -->
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

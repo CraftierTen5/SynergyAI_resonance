@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Apply the data-layer migrations and seed the local development institution.
+"""Apply the data-layer migrations.
 
-Run with the migrator credentials, not the application role:
+For a fresh local database, run with a PostgreSQL administrator: the initial
+migration creates roles and enables pgcrypto. Provision a restricted migration
+identity separately for deployments.
 
-    POSTGRES_DSN=postgresql://resonance_migrator:...@localhost/resonanceai \
+    POSTGRES_DSN=postgresql://postgres:...@localhost/resonanceai \
         python scripts/bootstrap_data_layer.py
 """
 
@@ -19,7 +21,13 @@ from app.db.postgres import PostgresStore  # noqa: E402
 
 
 async def main() -> int:
-    store = PostgresStore(dsn=os.environ.get("POSTGRES_DSN"))
+    dsn = os.environ.get("POSTGRES_DSN", "").strip()
+    if dsn:
+        store = PostgresStore(dsn=dsn)
+    else:
+        # An empty shell variable masks the value in .env; let Settings load it.
+        os.environ.pop("POSTGRES_DSN", None)
+        store = PostgresStore()
     await store.connect()
     try:
         applied = await store.migrate()

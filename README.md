@@ -1,14 +1,24 @@
 # ResonanceAI backend
 
-This repository snapshot contains the AI provider adapters, Redis-backed tutoring orchestration, policy guard, assessment utilities, and the preprocessing MVP. It does not contain assignment SQLAlchemy models/repositories, a PostgreSQL session, authentication, or authorization. Accordingly, the server exposes preprocessing and status routes only; tutoring generation is not exposed as a public route.
+ResonanceAI includes preprocessing, tenant-scoped PostgreSQL accounts and assignments, and an optional local tutoring placeholder. Public tutoring generation and institution-admin onboarding are not implemented.
 
 ## Run locally
 
-Create a virtual environment, install `requirements.txt`, copy `.env.example` to `.env`, and set `GEMINI_API_KEY` to enable Gemini preprocessing. Then run:
+Create a virtual environment, install `requirements.txt`, and copy `.env.example` to `.env`. For the initial local migration, set `POSTGRES_DSN` to a PostgreSQL administrator connection (migration `0001` creates roles and enables `pgcrypto`). Also configure `AUTH_SIGNING_KEY` and `PROCESS_LOG_PSEUDONYM_KEY` (each at least 32 random bytes). Apply schema migrations before launching:
+
+```powershell
+python scripts/bootstrap_data_layer.py
+```
+
+Set `GEMINI_API_KEY` to enable real Gemini preprocessing. Then run:
 
 ```powershell
 python -m uvicorn app.main:app --reload
 ```
+
+Set the runtime `POSTGRES_DSN` to the `resonance_app` DSN after migrations. Open http://localhost:8000/app. Create an account with an institution ID (letters, numbers, underscores, or hyphens). Other users in that institution can register using the same ID and exact institution name. Sign-in requires the institution ID, email, and password. Once signed in, add assignments from the dashboard; they are stored for that institution and loaded on later sign-ins.
+
+Generate local secrets with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Registration is open and creates an institution when its ID is new; this is intended for local integration testing, without email verification or institution administrator approval. Protect the service from public access until an institutional onboarding and administrator workflow is added. Session tokens expire after `SESSION_TTL_SECONDS` and are stored in the browser's local storage; signing out removes the browser token.
 
 Run the deterministic test suite with:
 
@@ -49,6 +59,8 @@ Gemini is required for translation, image extraction, and candidate policy evide
 
 - `GET /` and `GET /health`: process liveness.
 - `GET /ready`: process readiness and truthful Gemini/assignment-store/Qwen configuration state. It does not probe provider connectivity.
+- `POST /api/auth/register`, `POST /api/auth/login`, and `GET /api/auth/me`: institution-scoped registration and bearer sessions. Registration creates an institution when the supplied ID is unused.
+- `GET /api/assignments` and `POST /api/assignments`: authenticated, institution-scoped assignment listing and creation.
 - `POST /preprocess`: multipart text and PNG/JPEG/WebP input. Returns original and normalized text, language and extraction statuses, provenance, warnings, and policy resolution metadata. Uploads are processed in memory and not persisted.
 - `POST /dev/tutor/chat`: deterministic end-to-end demo, mounted only when `LOCAL_PLACEHOLDER_ENABLED=true`.
 
@@ -66,4 +78,4 @@ The configured Gemini REST adapter requests structured JSON. Translation retains
 
 `NormalizedClassifierInput` and `IntentActionRecommendation` define the future Qwen interface only; no model adapter or inference is implemented. Its eventual output must match the training prompt format and labels and remain advisory. The Python policy/action layer must validate any future recommendation before generation.
 
-No PDF upload, durable document storage, durable decision audit, institution isolation, or authenticated multi-user access is implemented. Selectable-text PDF extraction is also not part of this snapshot.
+Open registration is intended for local integration testing and has no email verification or institution administrator approval. Session tokens are bearer tokens stored in browser local storage. Do not expose this build to public users until institutional onboarding and administrator authorization are implemented. Selectable-text PDF extraction is not part of this snapshot.
