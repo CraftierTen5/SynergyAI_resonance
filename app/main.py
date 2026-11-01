@@ -21,8 +21,10 @@ from app.agent.local_placeholder import (
     LocalAuditService,
     LocalInputProcessor,
     LocalModelClient,
-    LocalResponseGenerator,
 )
+from app.agent.contracts import AgentResult, TrustedUserContext, TutorCommand
+from app.agent.postgres_assignment import PostgresAssignmentService, PostgresTutorAuditService
+from app.agent.provider_response import ProviderResponseGenerator
 from app.api.local_tutor import create_local_tutor_router
 from app.api.preprocess import create_preprocess_router
 from app.core.config import get_settings
@@ -30,7 +32,16 @@ from app.db.access import TenantScopedStore
 from app.db.postgres import PostgresStore
 from app.dependencies import build_agent_orchestrator
 from app.services.ai.gemini import GeminiFlashAdapter
+from app.services.ai.errors import (
+    ProviderAuthenticationError,
+    ProviderConfigurationError,
+    ProviderRateLimitError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from app.services.ai.preprocessing import GeminiPreprocessingService
+from app.services.ai.qwen_inference import QwenInferenceModelClient
 from app.services.auth import hash_password, issue_token, read_token, verify_password
 from app.services.policy.output_guard import ResponseGuard
 from app.services.policy.service import PolicyActionService
@@ -82,12 +93,19 @@ app.include_router(
 )
 
 if settings.local_placeholder_enabled:
+    # Supplying either inference setting opts into Qwen. A failed real request
+    # is surfaced as an API error and never falls back to the local classifier.
+    model_client = (
+        QwenInferenceModelClient(settings)
+        if settings.model_inference_url or settings.model_inference_api_key
+        else LocalModelClient()
+    )
     local_orchestrator = build_agent_orchestrator(
         assignments=LocalAssignmentService(),
         policy_actions=PolicyActionService(),
         input_processor=LocalInputProcessor(),
-        model_client=LocalModelClient(),
-        response_generator=LocalResponseGenerator(),
+        model_client=model_client,
+        response_generator=ProviderResponseGenerator(settings),
         response_guard=ResponseGuard(),
         audit_service=LocalAuditService(),
     )
@@ -120,13 +138,27 @@ async def health() -> dict[str, str]:
 @app.get("/ready", tags=["system"])
 async def ready() -> dict[str, object]:
     key = settings.gemini_api_key
+    response_provider = (
+        "groq"
+        if settings.groq_api_key and settings.groq_api_key.get_secret_value()
+        else "gemini"
+        if key and key.get_secret_value()
+        else "not_configured"
+    )
     return {
         "status": "ready",
         "dependencies": {
             "gemini_configured": bool(key and key.get_secret_value()),
             "assignment_store": "postgresql" if settings.postgres_dsn else "not_configured",
             "authentication": "configured" if settings.auth_signing_key else "not_configured",
-            "qwen": "not_implemented",
+            "qwen": (
+                "configured"
+                if settings.model_inference_url and settings.model_inference_api_key
+                else "incomplete_configuration"
+                if settings.model_inference_url or settings.model_inference_api_key
+                else "not_configured"
+            ),
+            "tutor_response_generation": response_provider,
             "local_placeholder": (
                 "enabled" if settings.local_placeholder_enabled else "disabled"
             ),
@@ -259,6 +291,53 @@ async def current_user(request: Request, authorization: str | None = Header(defa
     return {"user_id": str(row["user_id"]), "email": row["email"], "full_name": row["full_name"],
             "department": row["department"], "institution_id": institution["institution_id"],
             "institution_name": institution["name"]}
+
+
+@app.post("/api/tutor/chat", response_model=AgentResult, tags=["tutoring"])
+async def tutor_chat(
+    command: TutorCommand,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> AgentResult:
+    """Run tutoring against an authenticated, tenant-owned database assignment."""
+    session = _session(authorization)
+    store = _database(request)
+    tenant = _store_for(request, session)
+    user_id = UUID(session["user_id"])
+    user_row = await tenant.fetchrow(
+        "SELECT user_id FROM core.users WHERE user_id = $1", user_id
+    )
+    if user_row is None:
+        raise HTTPException(status_code=401, detail="Account no longer exists")
+
+    user = TrustedUserContext(
+        user_id=str(user_id), institution_id=session["institution_id"]
+    )
+    orchestrator = build_agent_orchestrator(
+        assignments=PostgresAssignmentService(store),
+        policy_actions=PolicyActionService(),
+        input_processor=LocalInputProcessor(),
+        model_client=QwenInferenceModelClient(settings),
+        response_generator=ProviderResponseGenerator(settings),
+        response_guard=ResponseGuard(),
+        audit_service=PostgresTutorAuditService(store),
+    )
+    try:
+        return await orchestrator.handle(command, user)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Assignment not found for this institution") from exc
+    except ProviderConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ProviderTimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Tutor model request timed out") from exc
+    except ProviderRateLimitError as exc:
+        raise HTTPException(status_code=503, detail="Tutor generation providers are rate limited") from exc
+    except ProviderUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="Tutor model provider is unavailable") from exc
+    except ProviderAuthenticationError as exc:
+        raise HTTPException(status_code=502, detail="Tutor provider authentication failed") from exc
+    except ProviderResponseError as exc:
+        raise HTTPException(status_code=502, detail="Tutor provider returned an invalid response") from exc
 
 
 @app.get("/api/assignments", tags=["assignments"])

@@ -58,6 +58,8 @@ class NormalizedInput(BaseModel):
     normalized_message: str
     original_language: str
     response_language: str
+    # Comes from the authorized assignment, never from client-supplied text.
+    policy_flag: Literal["RED", "YELLOW", "GREEN", "UNKNOWN"] = "UNKNOWN"
     extracted_document_text: str = ""
     assignment_context: str = ""
     normalization_method: str = "none"

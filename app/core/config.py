@@ -1,4 +1,5 @@
 from functools import lru_cache
+import ipaddress
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -29,12 +30,20 @@ class Settings(BaseSettings):
     groq_base_url: str = Field(
         default="https://api.groq.com/openai/v1", validation_alias="GROQ_BASE_URL"
     )
-    groq_model: str = Field(default="llama-3.3-70b-versatile", validation_alias="GROQ_MODEL")
+    groq_model: str = Field(default="openai/gpt-oss-120b", validation_alias="GROQ_MODEL")
     gemini_base_url: str = Field(
         default="https://generativelanguage.googleapis.com/v1beta",
         validation_alias="GEMINI_BASE_URL",
     )
-    gemini_model: str = Field(default="gemini-2.0-flash", validation_alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.5-flash", validation_alias="GEMINI_MODEL")
+
+    model_inference_url: str | None = Field(default=None, validation_alias="MODEL_INFERENCE_URL")
+    model_inference_api_key: SecretStr | None = Field(
+        default=None, validation_alias="MODEL_INFERENCE_API_KEY"
+    )
+    model_inference_timeout: float = Field(
+        default=120.0, gt=0, le=300, validation_alias="MODEL_INFERENCE_TIMEOUT"
+    )
 
     # Enables unauthenticated, server-owned demo fixtures for local pipeline checks.
     local_placeholder_enabled: bool = Field(
@@ -118,6 +127,40 @@ class Settings(BaseSettings):
         value = value.strip()
         if not value or any(ch.isspace() for ch in value):
             raise ValueError("model name must be a non-empty token without whitespace")
+        return value
+
+    @field_validator("model_inference_url")
+    @classmethod
+    def validate_model_inference_url(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        value = value.strip().rstrip("/")
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path != "/predict"
+        ):
+            raise ValueError("MODEL_INFERENCE_URL must be the inference /predict endpoint URL")
+        if parsed.scheme == "http":
+            try:
+                address = ipaddress.ip_address(parsed.hostname)
+            except ValueError as exc:
+                raise ValueError("HTTP inference endpoints must use a private or loopback IP") from exc
+            shared_private = ipaddress.ip_network("100.64.0.0/10")
+            if not (address.is_private or address.is_loopback or address in shared_private):
+                raise ValueError("HTTP inference endpoints must use a private or loopback IP")
+        return value
+
+    @field_validator("model_inference_api_key", mode="before")
+    @classmethod
+    def empty_inference_key_is_unset(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
         return value
 
     @field_validator("process_log_pseudonym_key")

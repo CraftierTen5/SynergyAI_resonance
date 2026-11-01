@@ -6,6 +6,13 @@ from fastapi import APIRouter, HTTPException
 
 from app.agent.contracts import AgentResult, TrustedUserContext, TutorCommand
 from app.agent.orchestrator import AgentOrchestrator
+from app.services.ai.errors import (
+    ProviderAuthenticationError,
+    ProviderConfigurationError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 
 
 def create_local_tutor_router(orchestrator: AgentOrchestrator) -> APIRouter:
@@ -20,6 +27,16 @@ def create_local_tutor_router(orchestrator: AgentOrchestrator) -> APIRouter:
             return await orchestrator.handle(command, demo_user)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="Demo assignment not found") from exc
+        except ProviderConfigurationError as exc:
+            raise HTTPException(status_code=503, detail="Model inference is not configured") from exc
+        except ProviderTimeoutError as exc:
+            raise HTTPException(status_code=504, detail="Model inference timed out") from exc
+        except ProviderUnavailableError as exc:
+            raise HTTPException(status_code=503, detail="Model inference is unavailable") from exc
+        except ProviderAuthenticationError as exc:
+            raise HTTPException(status_code=502, detail="Model inference authentication failed") from exc
+        except ProviderResponseError as exc:
+            raise HTTPException(status_code=502, detail="Model inference returned an invalid response") from exc
 
     return router
 

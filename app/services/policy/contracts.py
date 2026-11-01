@@ -19,6 +19,7 @@ Intent = Literal[
     "ANSWER_REQUEST",
     "LANGUAGE_SUPPORT",
     "SUMMARY_REQUEST",
+    "POLICY_EXTRACTION",
     "AMBIGUOUS",
 ]
 
@@ -31,6 +32,8 @@ RecommendedAction = Literal[
     "CLARIFY_REQUEST",
     "TRANSLATE_OR_EXPLAIN",
     "SUMMARIZE",
+    "EXTRACT_POLICY",
+    "REQUEST_HUMAN_REVIEW",
 ]
 
 PermittedAction = Literal[

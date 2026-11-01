@@ -15,19 +15,32 @@ import asyncio
 import os
 import sys
 
+from dotenv import dotenv_values
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.config import get_settings  # noqa: E402
 from app.db.postgres import PostgresStore  # noqa: E402
 
 
 async def main() -> int:
-    dsn = os.environ.get("POSTGRES_DSN", "").strip()
-    if dsn:
-        store = PostgresStore(dsn=dsn)
-    else:
-        # An empty shell variable masks the value in .env; let Settings load it.
+    settings = get_settings()
+    # Migrations need a privileged login, while the running API uses the
+    # least-privilege POSTGRES_DSN. Keep the privileged value out of app settings.
+    migration_dsn = os.environ.get("POSTGRES_MIGRATOR_DSN", "").strip()
+    if not migration_dsn:
+        migration_dsn = str(dotenv_values(".env").get("POSTGRES_MIGRATOR_DSN") or "").strip()
+    if not migration_dsn:
+        # Preserve the documented one-shot override for existing deployments.
+        migration_dsn = os.environ.get("POSTGRES_DSN", "").strip()
+    if not migration_dsn:
         os.environ.pop("POSTGRES_DSN", None)
-        store = PostgresStore()
+        migration_dsn = (
+            settings.postgres_dsn.get_secret_value().strip()
+            if settings.postgres_dsn is not None
+            else ""
+        )
+    store = PostgresStore(settings, dsn=migration_dsn or None)
     await store.connect()
     try:
         applied = await store.migrate()

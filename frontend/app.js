@@ -9,6 +9,125 @@ const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
 
+function renderInlineMarkdown(value) {
+  const codeSpans = [];
+  let html = escapeHTML(value).replace(/`([^`\n]+)`/g, (_, code) => {
+    const token = `\u0000CODE${codeSpans.length}\u0000`;
+    codeSpans.push(`<code>${code}</code>`);
+    return token;
+  });
+
+  html = html
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>')
+    .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
+
+  return html.replace(/\u0000CODE(\d+)\u0000/g, (_, index) => codeSpans[Number(index)]);
+}
+
+function renderMarkdown(value) {
+  const lines = String(value ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const blocks = [];
+  let paragraph = [];
+  let listType = null;
+  let listItems = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push(`<p>${paragraph.map(renderInlineMarkdown).join('<br>')}</p>`);
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!listItems.length) return;
+    const tag = listType === 'ordered' ? 'ol' : 'ul';
+    blocks.push(`<${tag}>${listItems.map(item => `<li>${renderInlineMarkdown(item)}</li>`).join('')}</${tag}>`);
+    listType = null;
+    listItems = [];
+  };
+  const flushText = () => {
+    flushParagraph();
+    flushList();
+  };
+  const tableCells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const fence = line.match(/^\s*```\s*([\w+-]*)\s*$/);
+    if (fence) {
+      flushText();
+      const code = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+        code.push(lines[i]);
+        i += 1;
+      }
+      const language = fence[1] ? ` class="language-${fence[1]}"` : '';
+      blocks.push(`<pre><code${language}>${escapeHTML(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (heading) {
+      flushText();
+      const level = heading[1].length;
+      blocks.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    if (/^\s{0,3}(?:---+|___+|\*\*\*+)\s*$/.test(line)) {
+      flushText();
+      blocks.push('<hr>');
+      continue;
+    }
+
+    if (line.includes('|') && i + 1 < lines.length && lines[i + 1].includes('|')) {
+      const headers = tableCells(line);
+      const separators = tableCells(lines[i + 1]);
+      if (headers.length && headers.length === separators.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
+        flushText();
+        const rows = [];
+        i += 2;
+        while (i < lines.length && lines[i].includes('|') && lines[i].trim()) {
+          rows.push(tableCells(lines[i]));
+          i += 1;
+        }
+        i -= 1;
+        blocks.push(`<div class="markdown-table-scroll"><table><thead><tr>${headers.map(cell => `<th>${renderInlineMarkdown(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, index) => `<td>${renderInlineMarkdown(row[index] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+        continue;
+      }
+    }
+
+    const listItem = line.match(/^\s*(?:([-+*])\s+|(\d+)[.)]\s+)(.+)$/);
+    if (listItem) {
+      flushParagraph();
+      const nextType = listItem[2] ? 'ordered' : 'unordered';
+      if (listType && listType !== nextType) flushList();
+      listType = nextType;
+      listItems.push(listItem[3]);
+      continue;
+    }
+
+    const quote = line.match(/^\s{0,3}>\s?(.*)$/);
+    if (quote) {
+      flushText();
+      blocks.push(`<blockquote><p>${renderInlineMarkdown(quote[1])}</p></blockquote>`);
+      continue;
+    }
+
+    if (!line.trim()) {
+      flushText();
+      continue;
+    }
+
+    flushList();
+    paragraph.push(line);
+  }
+
+  flushText();
+  return blocks.join('');
+}
+
 class ResonanceApp {
   constructor() {
     this.api = new ResonanceAPI();
@@ -513,8 +632,8 @@ class ResonanceApp {
                 <span>Attached: ${msg.attachment}</span>
               </div>
             ` : ''}
-            <p class="leading-relaxed">${msg.text}</p>
-            <div class="text-[10px] text-[var(--text-muted)] text-right font-mono">${msg.time}</div>
+            <p class="leading-relaxed">${escapeHTML(msg.text)}</p>
+            <div class="text-[10px] text-[var(--text-muted)] text-right font-mono">${escapeHTML(msg.time)}</div>
           </div>
           <div class="w-8 h-8 rounded-full bg-[var(--sage-badge)] text-[var(--sage-badge-text)] flex items-center justify-center font-semibold text-xs shrink-0">
             AS
@@ -534,10 +653,10 @@ class ResonanceApp {
           <div>
             <div class="flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
               <span>RESONANCE AI SOCRATIC TUTOR</span>
-              <span>${msg.time || 'Just now'}</span>
+              <span>${escapeHTML(msg.time || 'Just now')}</span>
             </div>
-            <h4 class="font-serif text-lg font-normal text-[var(--text-primary)]">${msg.headline || "Let's explore this step-by-step."}</h4>
-            <p class="text-[var(--text-secondary)] mt-1.5 leading-relaxed">${msg.body || msg.text || ""}</p>
+            <h4 class="font-serif text-lg font-normal text-[var(--text-primary)]">${escapeHTML(msg.headline || "Let's explore this step-by-step.")}</h4>
+            <div class="markdown-body text-[var(--text-secondary)] mt-1.5">${renderMarkdown(msg.body || msg.text || "")}</div>
           </div>
 
           <!-- Comparative Base Case Cards (Screen 5) -->
@@ -1002,10 +1121,30 @@ class ResonanceApp {
             actionTaken: d.selected_action,
             intent: d.intent,
           });
+        } else {
+          const errorMessage = res.data?.detail || res.data?.message || 'The tutor could not generate a response.';
+          this.state.chatMessages.push({
+            id: `msg-${Date.now()}`,
+            sender: 'tutor',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            headline: 'Tutor could not respond',
+            body: errorMessage,
+            stepLabel: 'Request failed',
+          });
+          this.showToast(errorMessage, 'error');
         }
       } catch (err) {
         this.state.isGenerating = false;
-        this.showToast("Error communicating with Layer 3 tutor", "error");
+        const errorMessage = err.message || 'Error communicating with the tutor.';
+        this.state.chatMessages.push({
+          id: `msg-${Date.now()}`,
+          sender: 'tutor',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          headline: 'Tutor could not respond',
+          body: errorMessage,
+          stepLabel: 'Request failed',
+        });
+        this.showToast(errorMessage, "error");
       }
 
       this.state.attachedFile = null;

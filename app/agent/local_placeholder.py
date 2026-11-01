@@ -37,6 +37,7 @@ class LocalInputProcessor:
             normalized_message=message,
             original_language=language,
             response_language=language,
+            policy_flag=assignment.policy_level,
             assignment_context=f"{assignment.title}: {assignment.subject or 'General'}",
             normalization_method="local_passthrough",
         )

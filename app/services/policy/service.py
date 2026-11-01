@@ -19,6 +19,7 @@ VALID_INTENTS = frozenset(
         "ANSWER_REQUEST",
         "LANGUAGE_SUPPORT",
         "SUMMARY_REQUEST",
+        "POLICY_EXTRACTION",
         "AMBIGUOUS",
     }
 )
@@ -33,6 +34,8 @@ VALID_RECOMMENDATIONS = frozenset(
         "CLARIFY_REQUEST",
         "TRANSLATE_OR_EXPLAIN",
         "SUMMARIZE",
+        "EXTRACT_POLICY",
+        "REQUEST_HUMAN_REVIEW",
     }
 )
 
@@ -126,6 +129,17 @@ class PolicyActionService:
         if not isinstance(recommended_action, str) or recommended_action not in VALID_RECOMMENDATIONS:
             return self._clarification(
                 mode, "INVALID_RECOMMENDED_ACTION", "Could you clarify what kind of help you need?"
+            )
+
+        if (
+            intent == "AMBIGUOUS"
+            or intent == "POLICY_EXTRACTION"
+            or recommended_action in {"CLARIFY_REQUEST", "EXTRACT_POLICY", "REQUEST_HUMAN_REVIEW"}
+        ):
+            return self._clarification(
+                mode,
+                "MODEL_REQUIRES_CLARIFICATION",
+                "This request needs clarification or policy review. Please add context or check with your instructor.",
             )
 
         if recommended_action == "CHECK_POLICY":

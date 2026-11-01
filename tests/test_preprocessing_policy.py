@@ -100,7 +100,7 @@ def test_status_routes_and_preprocess_missing_key_are_controlled():
     assert client.get("/").status_code == 200
     assert client.get("/health").json() == {"status": "ok"}
     ready = client.get("/ready").json()
-    assert ready["dependencies"]["qwen"] == "not_implemented"
+    assert ready["dependencies"]["qwen"] == "not_configured"
     assert ready["dependencies"]["assignment_store"] == "not_configured"
     response = client.post("/preprocess", data={"text": "hello"})
     assert response.status_code == 503

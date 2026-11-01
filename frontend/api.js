@@ -160,17 +160,19 @@ export class ResonanceAPI {
     };
 
     try {
-      const res = await fetch(`${this.baseUrl}/dev/tutor/chat`, {
+      const res = await fetch(`${this.baseUrl}/api/tutor/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      this.logEvent('/dev/tutor/chat', 'POST', res.status, payload, data, Math.round(performance.now() - t0));
+      const data = await res.json().catch(() => ({}));
+      const safePayload = { ...payload, message: '[redacted]' };
+      this.logEvent('/api/tutor/chat', 'POST', res.status, safePayload, data, Math.round(performance.now() - t0));
       return { ok: res.ok, status: res.status, data };
     } catch (err) {
-      this.logEvent('/dev/tutor/chat', 'POST', 0, payload, { error: err.message }, Math.round(performance.now() - t0));
+      const safePayload = { ...payload, message: '[redacted]' };
+      this.logEvent('/api/tutor/chat', 'POST', 0, safePayload, { error: err.message }, Math.round(performance.now() - t0));
       return { ok: false, status: 0, data: { status: 'error', message: 'Backend unavailable.' } };
     }
   }
