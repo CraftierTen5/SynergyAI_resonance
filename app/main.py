@@ -196,7 +196,6 @@ class AssignmentCreateRequest(BaseModel):
     course_title: str = Field(min_length=1, max_length=200)
     academic_term: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=300)
-    policy_level: str = Field(pattern=r"^(RED|YELLOW|GREEN)$")
     due_at: datetime | None = None
 
 
@@ -371,16 +370,16 @@ async def create_assignment(req: AssignmentCreateRequest, request: Request,
         assignment_id = await connection.fetchval(
             "INSERT INTO core.assignments (institution_id, course_id, title, policy_tier, due_at) "
             "VALUES ($1, $2, $3, $4, $5) RETURNING assignment_id",
-            tenant.institution_id, course_id, req.title.strip(), req.policy_level, req.due_at,
+            tenant.institution_id, course_id, req.title.strip(), "YELLOW", req.due_at,
         )
         await connection.execute(
             "INSERT INTO core.policy_versions (institution_id, assignment_id, version_label, policy_tier, instruction_profile) "
             "VALUES ($1, $2, 'v1', $3, 'guided')",
-            tenant.institution_id, assignment_id, req.policy_level,
+            tenant.institution_id, assignment_id, "YELLOW",
         )
     return {"assignment_id": str(assignment_id), "course_code": req.course_code,
-            "course_title": req.course_title, "title": req.title, "policy_level": req.policy_level,
-            "policy_name": req.policy_level, "description": ""}
+            "course_title": req.course_title, "title": req.title, "policy_level": "YELLOW",
+            "policy_name": "YELLOW", "description": ""}
 
 
 class DisclosureRequest(BaseModel):
