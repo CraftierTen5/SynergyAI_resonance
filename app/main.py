@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
+from app.agent.gemini_input import GeminiInputProcessor
 from app.agent.local_placeholder import (
     LocalAssignmentService,
     LocalAuditService,
@@ -315,7 +316,7 @@ async def tutor_chat(
     orchestrator = build_agent_orchestrator(
         assignments=PostgresAssignmentService(store),
         policy_actions=PolicyActionService(),
-        input_processor=LocalInputProcessor(),
+        input_processor=GeminiInputProcessor(preprocessing),
         model_client=QwenInferenceModelClient(settings),
         response_generator=ProviderResponseGenerator(settings),
         response_guard=ResponseGuard(),
