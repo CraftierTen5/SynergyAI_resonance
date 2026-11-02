@@ -46,7 +46,7 @@ class InputProcessorStub:
     def __init__(self, calls):
         self.calls = calls
 
-    async def normalize(self, message, language_preference, document_ids, user, assignment):
+    async def normalize(self, message, language_preference, document_ids, user, assignment, document_text="", images=None):
         self.calls.append("normalize")
         return NormalizedInput(
             original_message=message,
@@ -73,7 +73,7 @@ class ResponseGeneratorStub:
     def __init__(self, calls):
         self.calls = calls
 
-    async def generate(self, normalized, assignment, selected_action, mode):
+    async def generate(self, normalized, assignment, selected_action, mode, intent):
         self.calls.append("generate")
         return "A short explanation."
 
