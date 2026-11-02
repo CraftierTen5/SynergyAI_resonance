@@ -48,7 +48,7 @@ class RecordingInputProcessor:
     def __init__(self, calls):
         self.calls = calls
 
-    async def normalize(self, message, language_preference, document_ids, user, assignment):
+    async def normalize(self, message, language_preference, document_ids, user, assignment, document_text="", images=None):
         self.calls.append("normalize")
         return NormalizedInput(
             original_message=message,
@@ -74,7 +74,7 @@ class RecordingResponseGenerator:
         self.selected_actions = []
         self.modes = []
 
-    async def generate(self, normalized, assignment, selected_action, mode):
+    async def generate(self, normalized, assignment, selected_action, mode, intent):
         self.calls.append("generate")
         self.selected_actions.append(selected_action)
         self.modes.append(mode)
