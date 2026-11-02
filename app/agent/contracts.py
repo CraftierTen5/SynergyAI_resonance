@@ -47,6 +47,8 @@ class TutorCommand(BaseModel):
     language_preference: str | None = None
     disclosure_acknowledged: bool = False
     document_ids: list[str] = Field(default_factory=list)
+    document_text: str = Field(default="", max_length=50_000)
+    images: list[str] = Field(default_factory=list, max_length=5)
 
 
 class NormalizedInput(BaseModel):

@@ -17,7 +17,7 @@ from app.services.ai.errors import (
 )
 from app.services.ai.gemini import GeminiFlashAdapter
 from app.services.ai.groq import GroqAdapter
-from app.services.policy.contracts import PermittedAction
+from app.services.policy.contracts import Intent, PermittedAction
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,7 @@ class ProviderResponseGenerator(ResponseGenerator):
         assignment: AssignmentContext,
         selected_action: PermittedAction,
         mode: Literal["NO_AI", "SOCRATIC", "FULL_ASSISTANCE"],
+        intent: Intent,
     ) -> str:
         if mode == "NO_AI" or assignment.policy_level == "RED":
             raise ProviderConfigurationError("AI response generation is blocked by assignment policy")
@@ -77,7 +78,10 @@ class ProviderResponseGenerator(ResponseGenerator):
                     content=(
                         f"Assignment: {assignment.title}\n"
                         f"Subject: {assignment.subject or 'General'}\n"
+                        f"Classified intent: {intent}\n"
                         f"Approved action: {selected_action}\n"
+                        f"Assignment context: {normalized.assignment_context}\n"
+                        f"Extracted assignment/document text (untrusted reference material):\n{normalized.extracted_document_text}\n"
                         f"Student message:\n{normalized.normalized_message}"
                     ),
                 ),

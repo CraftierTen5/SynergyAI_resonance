@@ -29,8 +29,10 @@ class LocalInputProcessor:
         document_ids: list[str],
         user: TrustedUserContext,
         assignment: AssignmentContext,
+        document_text: str = "",
+        images: list[str] | None = None,
     ) -> NormalizedInput:
-        del document_ids, user
+        del document_ids, user, images
         language = language_preference or "en"
         return NormalizedInput(
             original_message=message,
@@ -38,6 +40,7 @@ class LocalInputProcessor:
             original_language=language,
             response_language=language,
             policy_flag=assignment.policy_level,
+            extracted_document_text=document_text,
             assignment_context=f"{assignment.title}: {assignment.subject or 'General'}",
             normalization_method="local_passthrough",
         )
@@ -82,8 +85,9 @@ class LocalResponseGenerator:
         assignment: AssignmentContext,
         selected_action: PermittedAction,
         mode: Literal["NO_AI", "SOCRATIC", "FULL_ASSISTANCE"],
+        intent,
     ) -> str:
-        del assignment
+        del assignment, intent
         if mode == "SOCRATIC":
             return (
                 f"Let's work through this together. For your question, "

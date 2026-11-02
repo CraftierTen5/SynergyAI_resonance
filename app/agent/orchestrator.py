@@ -76,6 +76,8 @@ class AgentOrchestrator:
             document_ids=command.document_ids,
             user=user,
             assignment=assignment,
+            document_text=command.document_text,
+            images=command.images,
         )
         recommendation = await self.model_client.classify(normalized)
         decision = self.policy_actions.select_action(
@@ -118,6 +120,7 @@ class AgentOrchestrator:
                 assignment=assignment,
                 selected_action=decision.selected_action,
                 mode=decision.mode,
+                intent=recommendation.intent,
             )
             output_check = self.response_guard.validate(
                 policy_level=assignment.policy_level,

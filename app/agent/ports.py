@@ -50,6 +50,8 @@ class InputProcessor(Protocol):
         document_ids: list[str],
         user: TrustedUserContext,
         assignment: AssignmentContext,
+        document_text: str = "",
+        images: list[str] | None = None,
     ) -> NormalizedInput: ...
 
 
@@ -82,6 +84,7 @@ class ResponseGenerator(Protocol):
         assignment: AssignmentContext,
         selected_action: PermittedAction,
         mode: Literal["NO_AI", "SOCRATIC", "FULL_ASSISTANCE"],
+        intent: Intent,
     ) -> str: ...
 
 
