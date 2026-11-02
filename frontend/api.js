@@ -149,9 +149,11 @@ export class ResonanceAPI {
     return data;
   }
 
-  async sendTutorMessage({ requestId, assignmentId, message, languagePreference, disclosureAcknowledged }) {
+  async sendTutorMessage({ requestId, assignmentId, message, languagePreference, disclosureAcknowledged, documentText = '', images = [] }) {
     const t0 = performance.now();
     const payload = {
+      document_text: documentText,
+      images,
       request_id: requestId || `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       assignment_id: assignmentId,
       message,
