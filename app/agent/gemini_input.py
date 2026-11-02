@@ -45,7 +45,7 @@ class GeminiInputProcessor:
             response_language=response_language,
             # Always use the policy retrieved from the authorized assignment.
             policy_flag=assignment.policy_level,
-            extracted_document_text=result.extracted_text,
+            extracted_document_text=result.extracted_text[:3_800],
             assignment_context=assignment_context,
             normalization_method="gemini_preprocessing",
         )
