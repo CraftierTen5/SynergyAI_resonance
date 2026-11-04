@@ -31,13 +31,14 @@ class PostgresAssignmentService:
             SELECT a.assignment_id, a.institution_id, a.title,
                    c.title AS subject,
                    COALESCE(policy.policy_tier, a.policy_tier) AS policy_level,
-                   COALESCE(policy.version_label, 'assignment-default') AS policy_version
+                   COALESCE(policy.version_label, 'assignment-default') AS policy_version,
+                   COALESCE(policy.system_instruction, '') AS system_instruction
             FROM core.assignments AS a
             JOIN core.courses AS c
               ON c.institution_id = a.institution_id
              AND c.course_id = a.course_id
             LEFT JOIN LATERAL (
-                SELECT pv.policy_tier, pv.version_label
+                SELECT pv.policy_tier, pv.version_label, pv.system_instruction
                 FROM core.policy_versions AS pv
                 WHERE pv.institution_id = a.institution_id
                   AND pv.assignment_id = a.assignment_id
@@ -54,13 +55,21 @@ class PostgresAssignmentService:
         if row is None:
             raise LookupError("Assignment not found")
 
+        policy_level = row["policy_level"]
+        system_instruction = str(row["system_instruction"])
+        policy_review_required = system_instruction.startswith("POLICY_REVIEW_REQUIRED;")
+        if policy_review_required:
+            # Uncertain evidence stays visibly YELLOW; policy service permits it.
+            policy_level = "YELLOW" if policy_level != "RED" else "RED"
+
         return AssignmentContext(
             assignment_id=str(row["assignment_id"]),
             institution_id=row["institution_id"],
             title=row["title"],
             subject=row["subject"],
-            policy_level=row["policy_level"],
+            policy_level=policy_level,
             policy_version=row["policy_version"],
+            policy_review_required=policy_review_required,
         )
 
 

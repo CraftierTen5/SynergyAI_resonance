@@ -3,7 +3,7 @@
  * High-fidelity implementation of Figma designs for Web and Mobile App views.
  */
 
-import { ResonanceAPI } from './api.js';
+import { ResonanceAPI } from './api.js?v=tutor-answer-ui-1';
 
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -135,7 +135,7 @@ class ResonanceApp {
     // Application State
     this.state = {
       viewMode: 'desktop', // 'desktop' | 'mobile'
-      currentScreen: 'welcome', // 'welcome' | 'signup' | 'dashboard' | 'tutor' | 'steps' | 'policy' | 'settings' | 'viva'
+      currentScreen: 'welcome', // 'welcome' | 'signup' | 'dashboard' | 'tutor' | 'policy' | 'settings' | 'viva'
       theme: 'light',
       activeAssignmentId: null,
       assignments: [],
@@ -368,8 +368,6 @@ class ResonanceApp {
         return this.renderDashboardScreen();
       case 'tutor':
         return this.renderTutorScreen();
-      case 'steps':
-        return this.renderStepsScreen();
       case 'policy':
         return this.renderPolicyScreen();
       case 'settings':
@@ -502,7 +500,7 @@ class ResonanceApp {
   renderDashboardScreen() {
     const assignments = this.state.assignments || [];
     return `
-      <section class="max-w-4xl mx-auto space-y-5">
+      <section class="max-w-6xl mx-auto space-y-5">
         <div>
           <h1 class="font-serif text-3xl font-normal">Your workspace</h1>
           <p class="text-sm text-[var(--text-secondary)]">Assignments returned by the connected backend.</p>
@@ -517,7 +515,7 @@ class ResonanceApp {
         </form>
         ${assignments.length ? `<div class="grid gap-4 md:grid-cols-2">${assignments.map(a => `
           <article class="p-5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-3">
-            <p class="text-xs text-[var(--text-muted)]">${escapeHTML(a.course_code)} ${a.policy_level ? `• ${escapeHTML(a.policy_level)}` : ''}</p>
+            <p class="text-xs text-[var(--text-muted)]">${escapeHTML(a.course_code)} ${a.policy_name || a.policy_level ? `• ${escapeHTML(a.policy_name || a.policy_level)}` : ''}</p>
             <h2 class="font-serif text-xl">${escapeHTML(a.title || 'Untitled assignment')}</h2>
             <p class="text-sm text-[var(--text-secondary)]">${escapeHTML(a.description)}</p>
             <button data-open-assignment="${escapeHTML(a.assignment_id)}" class="btn-open-workspace px-4 py-2 rounded-xl bg-[var(--sage-primary)] text-white text-sm">Open workspace</button>
@@ -533,6 +531,7 @@ class ResonanceApp {
 
     const isYellow = assignment.policy_level === 'YELLOW';
     const isRed = assignment.policy_level === 'RED';
+    const policyReviewPending = Boolean(assignment.policy_review_required);
 
     return `
       <div class="space-y-5 animate-fade-in flex flex-col h-[calc(100vh-140px)]">
@@ -555,8 +554,9 @@ class ResonanceApp {
             </div>
           </div>
 
-          <!-- Language Selector & Deposit Action -->
+          <!-- Language and chat controls -->
           <div class="flex items-center gap-2.5">
+            <button id="btn-new-chat" class="px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-xs font-medium text-[var(--text-secondary)]">New chat</button>
             <!-- Multilingual selector -->
             <select id="select-tutor-language" class="text-xs font-mono py-1.5 px-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-app)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--sage-primary)]">
               <option value="en" ${this.state.selectedLanguage === 'en' ? 'selected' : ''}>English (EN)</option>
@@ -565,22 +565,24 @@ class ResonanceApp {
               <option value="te" ${this.state.selectedLanguage === 'te' ? 'selected' : ''}>Telugu (తెలుగు)</option>
             </select>
 
-            ${isYellow ? `
-              <button id="btn-open-disclose-modal" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium shadow-sm flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>Deposit & Disclose</span>
-              </button>
-            ` : ''}
           </div>
         </div>
 
         <!-- Chat History Stream -->
         <div id="tutor-chat-stream" class="flex-1 overflow-y-auto space-y-5 p-4 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+          ${(isRed || policyReviewPending) ? `
+            <div role="status" class="p-4 rounded-xl bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] text-sm text-[var(--text-secondary)]">
+              <strong class="block text-[var(--text-primary)]">${policyReviewPending ? 'Policy review pending — AI assistance is allowed' : 'AI assistance is barred'}</strong>
+              <span>${policyReviewPending
+                ? 'The policy is uncertain, so the app is assuming AI use is allowed. You can continue asking for full answers while review is pending.'
+                : 'You can view this chat, but the tutor will not generate assistance under this RED assignment policy.'}</span>
+            </div>
+          ` : ''}
           ${this.state.chatMessages.map(msg => this.renderChatMessage(msg)).join('')}
           ${this.state.isGenerating ? `
             <div class="p-4 rounded-xl bg-[var(--bg-surface-subtle)] border border-[var(--border-subtle)] text-xs font-mono flex items-center gap-3 animate-pulse">
               <div class="w-3 h-3 rounded-full bg-[var(--sage-primary)] animate-ping"></div>
-              <span>Socratic orchestrator reasoning through pedagogical policy...</span>
+              <span>Reading your question and preparing an answer…</span>
             </div>
           ` : ''}
         </div>
@@ -592,7 +594,7 @@ class ResonanceApp {
             <div class="flex items-center gap-2 text-[var(--text-secondary)]">
               <svg class="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
               <span id="attachment-name" class="font-mono">notes_diagram.png</span>
-              <span class="text-[10px] text-[var(--text-muted)]">(Multipart /preprocess ready)</span>
+              <span class="text-[10px] text-[var(--text-muted)]">(The tutor will read this PDF)</span>
             </div>
             <button id="btn-remove-attachment" class="text-[var(--text-muted)] hover:text-red-500">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -601,8 +603,8 @@ class ResonanceApp {
 
           <div class="flex items-center gap-2">
             <!-- Hidden file input for Multimodal OCR / Notes -->
-            <input type="file" id="file-multimodal" accept="image/png,image/jpeg,image/webp" class="hidden">
-            <button id="btn-trigger-upload" class="p-2.5 rounded-xl border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)]" title="Upload handwritten notes or tree diagram (OCR via /preprocess)">
+            <input type="file" id="file-multimodal" accept="application/pdf,.pdf,image/png,.png,image/jpeg,.jpg,.jpeg,image/webp,.webp" class="hidden">
+            <button id="btn-trigger-upload" class="p-2.5 rounded-xl border border-[var(--border-subtle)] hover:bg-[var(--bg-surface-subtle)] text-[var(--text-secondary)]" title="Attach a PDF assignment or notes">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
 
@@ -652,10 +654,10 @@ class ResonanceApp {
         <div class="flex-1 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 shadow-sm space-y-4 text-xs">
           <div>
             <div class="flex items-center justify-between text-[10px] font-mono text-[var(--text-muted)] mb-1">
-              <span>RESONANCE AI SOCRATIC TUTOR</span>
+              <span>RESONANCE AI TUTOR</span>
               <span>${escapeHTML(msg.time || 'Just now')}</span>
             </div>
-            <h4 class="font-serif text-lg font-normal text-[var(--text-primary)]">${escapeHTML(msg.headline || "Let's explore this step-by-step.")}</h4>
+            <h4 class="font-serif text-lg font-normal text-[var(--text-primary)]">${escapeHTML(msg.headline || 'Answer')}</h4>
             <div class="markdown-body text-[var(--text-secondary)] mt-1.5">${renderMarkdown(msg.body || msg.text || "")}</div>
           </div>
 
@@ -672,85 +674,6 @@ class ResonanceApp {
             </div>
           ` : ''}
 
-          <!-- Reflective Question Callout (Screen 5) -->
-          ${msg.reflectiveQuestion ? `
-            <div class="reflective-box space-y-1">
-              <span class="text-[10px] font-mono font-semibold text-[var(--sage-primary)] uppercase tracking-wider">REFLECTIVE PROMPT</span>
-              <p class="font-medium text-[var(--text-primary)] text-xs leading-relaxed">${msg.reflectiveQuestion}</p>
-            </div>
-          ` : ''}
-
-          <!-- Step Progression Pill -->
-          <div class="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)] text-[11px]">
-            <span class="font-mono text-[var(--text-muted)]">${msg.stepLabel || 'Step 1 of 3: Identify Return Type'}</span>
-            <button class="btn-next-step text-[var(--sage-primary)] font-semibold hover:underline flex items-center gap-1">
-              <span>Next Socratic Deduction</span>
-              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  // ========================================================================
-  // Screen 6: Stepped Progression & Light/Dark Theme Showcase
-  // ========================================================================
-  renderStepsScreen() {
-    return `
-      <div class="space-y-6 animate-fade-in">
-        <div>
-          <div class="text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">SOCRATIC METHODOLOGY</div>
-          <h1 class="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight mt-0.5">A clear next step at every moment.</h1>
-          <p class="text-xs text-[var(--text-secondary)] mt-1">Stepped hint architecture scaffolded for independent cognitive mastery.</p>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Step 1 Card -->
-          <div class="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-sm space-y-4">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--sage-primary-light)] text-[var(--sage-primary)] font-semibold">STAGE 01</span>
-              <span class="text-xs text-[var(--text-muted)] font-mono">Status: Completed</span>
-            </div>
-            <div>
-              <h3 class="font-serif text-xl font-normal text-[var(--text-primary)]">Deconstruct Problem Boundary</h3>
-              <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">Isolate the base case from the recursive propagation. Define the exact invariant your algorithm guarantees on an empty tree.</p>
-            </div>
-            <div class="p-3.5 rounded-xl bg-[var(--bg-app)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] font-mono">
-              Base Invariant: Empty node return value must match the identity element of the operation (+ for sum, None for tree).
-            </div>
-          </div>
-
-          <!-- Step 2 Card -->
-          <div class="p-6 rounded-2xl bg-[var(--bg-surface)] border-2 border-[var(--sage-primary)] shadow-md space-y-4 relative">
-            <div class="flex items-center justify-between">
-              <span class="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--sage-primary)] text-white font-semibold">STAGE 02 • ACTIVE</span>
-              <span class="text-xs text-emerald-600 font-mono font-medium">In Progress</span>
-            </div>
-            <div>
-              <h3 class="font-serif text-xl font-normal text-[var(--text-primary)]">Recursive Step Deduction</h3>
-              <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">Formulate how the current root combines the results of the left subtree and right subtree.</p>
-            </div>
-            <div class="reflective-box text-xs space-y-1">
-              <p class="font-medium text-[var(--text-primary)]">Write down the recurrence relation: T(n) = 2T(n/2) + O(1)</p>
-            </div>
-            <button id="btn-proceed-step-3" class="w-full py-2.5 rounded-xl bg-[var(--sage-primary)] hover:bg-[var(--sage-primary-hover)] text-white text-xs font-medium transition-colors">
-              Verify Deduction & Advance
-            </button>
-          </div>
-        </div>
-
-        <!-- Light & Dark Side-by-Side Preview from Screen 6 -->
-        <div class="p-6 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h3 class="font-serif text-lg font-normal text-[var(--text-primary)]">Dual Mode Atmosphere Preview</h3>
-              <p class="text-xs text-[var(--text-secondary)]">Optimized for late night research and daylight lectures.</p>
-            </div>
-            <button id="btn-toggle-demo-theme" class="px-3.5 py-1.5 rounded-xl border border-[var(--border-subtle)] text-xs font-medium hover:bg-[var(--bg-surface-subtle)]">
-              Toggle Current App Theme
-            </button>
-          </div>
         </div>
       </div>
     `;
@@ -776,11 +699,11 @@ class ResonanceApp {
                 <span class="w-2 h-2 rounded-full bg-amber-600"></span>
                 YELLOW • PROCESS DISCLOSURE
               </div>
-              <h3 class="font-serif text-xl font-normal text-[var(--text-primary)]">AI is allowed with required disclosure.</h3>
+              <h3 class="font-serif text-xl font-normal text-[var(--text-primary)]">No clear AI rule was found.</h3>
               <ul class="text-xs text-[var(--text-secondary)] space-y-2.5 leading-relaxed">
                 <li class="flex items-start gap-2">
                   <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                  <span>You may query concepts and receive stepped guidance.</span>
+                  <span>AI help is available. Follow any course-specific instructions.</span>
                 </li>
                 <li class="flex items-start gap-2">
                   <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1051,19 +974,22 @@ class ResonanceApp {
     container.querySelectorAll('.btn-open-workspace').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const aid = e.currentTarget.getAttribute('data-open-assignment');
+        if (aid !== this.state.activeAssignmentId) this.state.chatMessages = [];
         this.state.activeAssignmentId = aid;
-        const assignment = this.state.assignments.find(item => item.assignment_id === aid);
-        if (assignment?.policy_level === 'RED') {
-          this.navigateTo('policy');
-        } else {
-          this.navigateTo('tutor');
-        }
+        this.navigateTo('tutor');
       });
     });
 
     // Tutor Screen Events
     container.querySelector('#btn-back-dashboard')?.addEventListener('click', () => {
       this.navigateTo('dashboard');
+    });
+
+    container.querySelector('#btn-new-chat')?.addEventListener('click', () => {
+      this.state.chatMessages = [];
+      this.state.attachedFile = null;
+      this.state.disclosureAcknowledged = false;
+      this.render();
     });
 
     container.querySelector('#btn-open-disclose-modal')?.addEventListener('click', () => {
@@ -1083,7 +1009,8 @@ class ResonanceApp {
       const text = inputMsg?.value?.trim();
       if (!text && !this.state.attachedFile) return;
 
-      const userText = text || "Examining attached diagram...";
+      const attachedFile = this.state.attachedFile;
+      const userText = text || "Explain this attachment in simple terms.";
       inputMsg.value = '';
 
       // Add student message to state
@@ -1092,47 +1019,99 @@ class ResonanceApp {
         sender: 'student',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: userText,
-        attachment: this.state.attachedFile?.name || null,
+        attachment: attachedFile?.name || null,
       });
 
       this.state.isGenerating = true;
       this.render();
 
       try {
-        const res = await this.api.sendTutorMessage({
-          assignmentId: this.state.activeAssignmentId,
-          message: userText,
-          languagePreference: this.state.selectedLanguage,
-          disclosureAcknowledged: this.state.disclosureAcknowledged,
-        });
-
-        this.state.isGenerating = false;
-
-        if (res.ok && res.data) {
-          const d = res.data;
-          this.state.chatMessages.push({
-            id: `msg-${Date.now()}`,
-            sender: 'tutor',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            headline: d.status === 'refused' ? "Action Barred by Policy Guard" : "Socratic Guidance",
-            body: d.message,
-            reflectiveQuestion: d.status !== 'refused' ? "What edge case should we check next before continuing?" : null,
-            stepLabel: d.status !== 'refused' ? "Step 2 of 3: Deduce Invariant" : "Refusal Enforced",
-            actionTaken: d.selected_action,
-            intent: d.intent,
+        let continueToTutor = true;
+        let documentContext = '';
+        if (attachedFile) {
+          const checked = await this.api.checkAssignmentPolicyDocument({
+            assignmentId: this.state.activeAssignmentId,
+            document: attachedFile,
           });
-        } else {
-          const errorMessage = res.data?.detail || res.data?.message || 'The tutor could not generate a response.';
-          this.state.chatMessages.push({
-            id: `msg-${Date.now()}`,
-            sender: 'tutor',
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            headline: 'Tutor could not respond',
-            body: errorMessage,
-            stepLabel: 'Request failed',
-          });
-          this.showToast(errorMessage, 'error');
+          if (!checked.ok) {
+            throw new Error(checked.data?.detail || 'Assignment policy could not be checked. Tutoring was stopped.');
+          }
+          if (
+            !['RED', 'YELLOW', 'GREEN'].includes(checked.data?.policy_level)
+            || !['blocked', 'review_required', 'verified'].includes(checked.data?.status)
+          ) {
+            throw new Error('Assignment policy check returned an invalid result. Tutoring was stopped.');
+          }
+          const assignment = this.state.assignments.find(
+            item => item.assignment_id === this.state.activeAssignmentId,
+          );
+          if (assignment) {
+            assignment.policy_level = checked.data.policy_level;
+            assignment.policy_name = checked.data.policy_name;
+            assignment.policy_review_required = checked.data.policy_review_required;
+          }
+          documentContext = checked.data.document_context || '';
+          if (checked.data.policy_level === 'RED' || checked.data.status === 'blocked') {
+            continueToTutor = false;
+            this.state.chatMessages.push({
+              id: `msg-${Date.now()}`,
+              sender: 'tutor',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              headline: 'AI help is not available',
+              body: checked.data.message,
+            });
+            this.showToast(checked.data.message, 'error');
+          } else if (!checked.data.document_readable || !documentContext.trim()) {
+            continueToTutor = false;
+            this.state.chatMessages.push({
+              id: `msg-${Date.now()}`,
+              sender: 'tutor',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              headline: 'I could not read this PDF',
+              body: 'Try a searchable PDF or paste the question here. I need the assignment text to explain the right material.',
+            });
+          }
         }
+
+        if (continueToTutor) {
+          const res = await this.api.sendTutorMessage({
+            assignmentId: this.state.activeAssignmentId,
+            message: userText,
+            languagePreference: this.state.selectedLanguage,
+            disclosureAcknowledged: this.state.disclosureAcknowledged,
+            documentContext,
+          });
+
+          if (res.ok && res.data) {
+            const d = res.data;
+            this.state.chatMessages.push({
+              id: `msg-${Date.now()}`,
+              sender: 'tutor',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              headline: d.status === 'refused'
+                ? 'AI help is not available'
+                : d.status === 'failed'
+                  ? 'Could not answer'
+                : d.status === 'needs_clarification'
+                  ? 'Quick question'
+                  : 'Answer',
+              body: d.message,
+              actionTaken: d.selected_action,
+              intent: d.intent,
+            });
+          } else {
+            const errorMessage = res.data?.detail || res.data?.message || 'The tutor could not generate a response.';
+            this.state.chatMessages.push({
+              id: `msg-${Date.now()}`,
+              sender: 'tutor',
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              headline: 'Tutor could not respond',
+              body: errorMessage,
+            });
+            this.showToast(errorMessage, 'error');
+          }
+        }
+        this.state.isGenerating = false;
       } catch (err) {
         this.state.isGenerating = false;
         const errorMessage = err.message || 'Error communicating with the tutor.';
@@ -1142,7 +1121,6 @@ class ResonanceApp {
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           headline: 'Tutor could not respond',
           body: errorMessage,
-          stepLabel: 'Request failed',
         });
         this.showToast(errorMessage, "error");
       }
@@ -1176,7 +1154,7 @@ class ResonanceApp {
           preview.classList.remove('hidden');
           preview.classList.add('flex');
         }
-        this.showToast(`Attached: ${file.name} (Ready for OCR)`, "info");
+        this.showToast(`Attached ${file.name}. The tutor will read it before answering.`, "info");
       }
     });
 
@@ -1189,13 +1167,6 @@ class ResonanceApp {
       }
     });
 
-    // Next Step Action inside tutor cards
-    container.querySelectorAll('.btn-next-step').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.navigateTo('steps');
-      });
-    });
-
     // Policy Matrix Test Buttons
     container.querySelectorAll('.btn-test-policy').forEach(btn => {
       btn.addEventListener('click', async (e) => {
@@ -1204,17 +1175,6 @@ class ResonanceApp {
         this.showToast(`Loaded policy for ${aid}`, "info");
         this.navigateTo('tutor');
       });
-    });
-
-    // Theme comparison button on Steps screen
-    container.querySelector('#btn-toggle-demo-theme')?.addEventListener('click', () => {
-      this.toggleTheme();
-    });
-
-    // Step 2 Proceed button
-    container.querySelector('#btn-proceed-step-3')?.addEventListener('click', () => {
-      this.showToast("Invariant verified! Stepped deduction approved.", "success");
-      this.navigateTo('tutor');
     });
 
   }

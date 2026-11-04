@@ -13,9 +13,10 @@ from app.services.policy.service import PolicyActionService
 
 
 class AssignmentStub:
-    def __init__(self, calls, policy_level):
+    def __init__(self, calls, policy_level, policy_review_required=False):
         self.calls = calls
         self.policy_level = policy_level
+        self.policy_review_required = policy_review_required
 
     async def get_authorized_assignment(self, assignment_id, user):
         self.calls.append("assignment")
@@ -25,6 +26,7 @@ class AssignmentStub:
             title="Test assignment",
             policy_level=self.policy_level,
             policy_version="v1",
+            policy_review_required=self.policy_review_required,
         )
 
 
@@ -98,10 +100,10 @@ class AuditStub:
         self.calls.append("audit")
 
 
-def build_orchestrator(policy_level):
+def build_orchestrator(policy_level, policy_review_required=False):
     calls = []
     orchestrator = AgentOrchestrator(
-        assignments=AssignmentStub(calls, policy_level),
+        assignments=AssignmentStub(calls, policy_level, policy_review_required),
         policy_actions=PolicySpy(calls),
         input_processor=InputProcessorStub(calls),
         model_client=ModelClientStub(calls),
@@ -136,13 +138,29 @@ async def test_red_short_circuits_before_input_processing_model_and_generation()
 
 
 @pytest.mark.asyncio
-async def test_yellow_without_acknowledgment_short_circuits_before_ai_processing():
+async def test_policy_review_pending_uses_permissive_yellow_assumption():
+    orchestrator, calls = build_orchestrator("YELLOW", policy_review_required=True)
+
+    result = await orchestrator.handle(command(), user())
+
+    assert result.status == "completed"
+    assert calls == [
+        "assignment", "preflight", "normalize", "classify", "select_action",
+        "generate", "validate", "audit",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_yellow_without_acknowledgment_allows_answer():
     orchestrator, calls = build_orchestrator("YELLOW")
 
     result = await orchestrator.handle(command(), user())
 
-    assert result.status == "needs_clarification"
-    assert calls == ["assignment", "preflight", "audit"]
+    assert result.status == "completed"
+    assert calls == [
+        "assignment", "preflight", "normalize", "classify", "select_action",
+        "generate", "validate", "audit",
+    ]
 
 
 @pytest.mark.asyncio

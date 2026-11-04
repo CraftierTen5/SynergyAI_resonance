@@ -58,33 +58,20 @@ class PolicyActionService:
         assignment: AssignmentPolicyContext,
         disclosure_acknowledged: bool,
     ) -> PreflightDecision:
-        """Gate tutoring before input processing, OCR, or model/provider calls."""
+        """Block tutoring only when policy explicitly prohibits AI use."""
         if assignment.policy_level == "RED":
             return PreflightDecision(
                 allowed=False,
                 mode="NO_AI",
-                user_message=(
-                    "AI assistance is not permitted for this assignment. "
-                    "Please follow your instructor's guidance."
-                ),
+                user_message="AI help is not permitted for this assignment.",
                 reason_code="POLICY_RED",
             )
 
         if assignment.policy_level == "YELLOW":
-            if disclosure_acknowledged is not True:
-                return PreflightDecision(
-                    allowed=False,
-                    mode="SOCRATIC",
-                    user_message=(
-                        "Please acknowledge the AI-use disclosure before "
-                        "continuing with guided assistance."
-                    ),
-                    reason_code="DISCLOSURE_REQUIRED",
-                )
             return PreflightDecision(
                 allowed=True,
-                mode="SOCRATIC",
-                reason_code="POLICY_YELLOW_ACKNOWLEDGED",
+                mode="FULL_ASSISTANCE",
+                reason_code="POLICY_YELLOW_ASSUMED_ALLOWED",
             )
 
         if assignment.policy_level == "GREEN":
@@ -110,7 +97,7 @@ class PolicyActionService:
     ) -> ActionDecision:
         """Validate untrusted model labels, then return a backend action."""
         level = assignment.policy_level
-        mode = "SOCRATIC" if level == "YELLOW" else "FULL_ASSISTANCE"
+        mode = "FULL_ASSISTANCE"
 
         if level == "RED":
             return ActionDecision(
@@ -122,13 +109,17 @@ class PolicyActionService:
             )
 
         if not isinstance(intent, str) or intent not in VALID_INTENTS:
+            if mode == "FULL_ASSISTANCE":
+                return self._best_effort_explanation("INVALID_INTENT")
             return self._clarification(
-                mode, "INVALID_INTENT", "I could not confidently classify the request. Could you rephrase it?"
+                mode, "INVALID_INTENT", "Which part would you like help with?"
             )
 
         if not isinstance(recommended_action, str) or recommended_action not in VALID_RECOMMENDATIONS:
+            if mode == "FULL_ASSISTANCE":
+                return self._best_effort_explanation("INVALID_RECOMMENDED_ACTION")
             return self._clarification(
-                mode, "INVALID_RECOMMENDED_ACTION", "Could you clarify what kind of help you need?"
+                mode, "INVALID_RECOMMENDED_ACTION", "Which part would you like help with?"
             )
 
         if (
@@ -136,20 +127,31 @@ class PolicyActionService:
             or intent == "POLICY_EXTRACTION"
             or recommended_action in {"CLARIFY_REQUEST", "EXTRACT_POLICY", "REQUEST_HUMAN_REVIEW"}
         ):
+            if mode == "FULL_ASSISTANCE":
+                return self._best_effort_explanation("BEST_EFFORT_EXPLANATION")
             return self._clarification(
                 mode,
                 "MODEL_REQUIRES_CLARIFICATION",
-                "This request needs clarification or policy review. Please add context or check with your instructor.",
+                "Which part would you like help with?",
+            )
+
+        if level == "GREEN" and intent == "CONCEPT_EXPLANATION":
+            return self._best_effort_explanation("CONCEPT_EXPLANATION")
+
+        if level == "GREEN" and intent == "ANSWER_REQUEST":
+            return ActionDecision(
+                allowed=True,
+                selected_action="FULL_ASSISTANCE",
+                mode="FULL_ASSISTANCE",
+                reason_code="ANSWER_REQUEST_GREEN",
             )
 
         if recommended_action == "CHECK_POLICY":
             if intent == "ANSWER_REQUEST":
-                action: PermittedAction = (
-                    "GUIDE_PLANNING" if level == "YELLOW" else "FULL_ASSISTANCE"
-                )
-                reason = "ANSWER_REQUEST_GUIDED" if level == "YELLOW" else "ANSWER_REQUEST_GREEN"
+                action: PermittedAction = "FULL_ASSISTANCE"
+                reason = "ANSWER_REQUEST_ALLOWED"
             else:
-                action = "GIVE_HINT" if level == "YELLOW" else "EXPLAIN_CONCEPT"
+                action = "EXPLAIN_CONCEPT"
                 reason = "POLICY_CHECK_RESOLVED"
             return ActionDecision(
                 allowed=True,
@@ -158,25 +160,8 @@ class PolicyActionService:
                 reason_code=reason,
             )
 
-        if level == "YELLOW":
-            if recommended_action not in YELLOW_ACTIONS:
-                return ActionDecision(
-                    allowed=True,
-                    needs_clarification=True,
-                    selected_action="CLARIFY_REQUEST",
-                    mode="SOCRATIC",
-                    user_message="Let's work through the problem step by step. What have you tried so far?",
-                    reason_code="YELLOW_ACTION_RESTRICTED",
-                )
-            return ActionDecision(
-                allowed=True,
-                selected_action=YELLOW_ACTIONS[recommended_action],
-                mode="SOCRATIC",
-                reason_code="YELLOW_ACTION_ALLOWED",
-            )
-
-        # GREEN may use any recognized recommendation, but the returned
-        # action is still validated against the separate permitted-action set.
+        # Both YELLOW (unmentioned/unclear) and GREEN (explicitly permitted)
+        # receive the requested answer. RED was rejected above.
         selected = recommended_action
         if selected not in {
             "EXPLAIN_CONCEPT",
@@ -187,14 +172,21 @@ class PolicyActionService:
             "SUMMARIZE",
             "CLARIFY_REQUEST",
         }:
-            return self._clarification(
-                "FULL_ASSISTANCE", "ACTION_NOT_PERMITTED", "Could you clarify what kind of help you need?"
-            )
+            return self._best_effort_explanation("ACTION_DEFAULTED_TO_EXPLANATION")
         return ActionDecision(
             allowed=True,
             selected_action=selected,  # type: ignore[arg-type]
             mode="FULL_ASSISTANCE",
             reason_code="GREEN_ACTION_ALLOWED",
+        )
+
+    @staticmethod
+    def _best_effort_explanation(reason_code: str) -> ActionDecision:
+        return ActionDecision(
+            allowed=True,
+            selected_action="EXPLAIN_CONCEPT",
+            mode="FULL_ASSISTANCE",
+            reason_code=reason_code,
         )
 
     @staticmethod

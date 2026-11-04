@@ -28,18 +28,18 @@ def test_red_preflight_refuses_and_action_selection_never_overrides_it():
     assert action.mode == "NO_AI"
 
 
-def test_yellow_requires_explicit_disclosure_before_processing():
+def test_yellow_defaults_to_allowed_without_confirmation():
     service = PolicyActionService()
 
     missing = service.preflight(assignment("YELLOW"), disclosure_acknowledged=False)
     truthy_non_boolean = service.preflight(assignment("YELLOW"), disclosure_acknowledged="yes")
     acknowledged = service.preflight(assignment("YELLOW"), disclosure_acknowledged=True)
 
-    assert not missing.allowed
-    assert missing.reason_code == "DISCLOSURE_REQUIRED"
-    assert not truthy_non_boolean.allowed
+    assert missing.allowed
+    assert missing.reason_code == "POLICY_YELLOW_ASSUMED_ALLOWED"
+    assert truthy_non_boolean.allowed
     assert acknowledged.allowed
-    assert acknowledged.mode == "SOCRATIC"
+    assert missing.mode == acknowledged.mode == "FULL_ASSISTANCE"
 
 
 def test_green_preflight_allows_full_assistance_without_external_dependencies():
@@ -54,24 +54,25 @@ def test_green_preflight_allows_full_assistance_without_external_dependencies():
     assert not hasattr(service, "ocr")
 
 
-def test_invalid_model_labels_only_return_clarification_decisions():
+def test_invalid_model_labels_use_best_effort_explanation_on_green_policy():
     decision = PolicyActionService().select_action(
         assignment("GREEN"), "UNKNOWN_INTENT", "FULL_ASSISTANCE"
     )
 
-    assert not decision.allowed
-    assert decision.needs_clarification
-    assert decision.selected_action == "CLARIFY_REQUEST"
+    assert decision.allowed
+    assert not decision.needs_clarification
+    assert decision.selected_action == "EXPLAIN_CONCEPT"
+    assert decision.mode == "FULL_ASSISTANCE"
 
 
-def test_yellow_answer_request_is_mapped_to_guidance_not_full_assistance():
+def test_yellow_answer_request_is_allowed_without_confirmation():
     decision = PolicyActionService().select_action(
         assignment("YELLOW"), "ANSWER_REQUEST", "CHECK_POLICY"
     )
 
     assert decision.allowed
-    assert decision.selected_action == "GUIDE_PLANNING"
-    assert decision.mode == "SOCRATIC"
+    assert decision.selected_action == "FULL_ASSISTANCE"
+    assert decision.mode == "FULL_ASSISTANCE"
 
 
 def test_response_guard_rejects_red_empty_and_oversized_socratic_outputs():
@@ -82,10 +83,9 @@ def test_response_guard_rejects_red_empty_and_oversized_socratic_outputs():
     assert guard.validate(policy_level="YELLOW", mode="SOCRATIC", response_text="x" * 11).reason_code == "YELLOW_OUTPUT_TOO_LONG"
 
 
-def test_response_guard_enforces_yellow_mode():
+def test_response_guard_allows_direct_answer_for_yellow_policy():
     result = ResponseGuard().validate(
         policy_level="YELLOW", mode="FULL_ASSISTANCE", response_text="Answer"
     )
 
-    assert not result.allowed
-    assert result.reason_code == "POLICY_MODE_MISMATCH"
+    assert result.allowed

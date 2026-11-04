@@ -20,7 +20,7 @@ def _unknown_policy(
     requires_human_review: bool,
     resolution_reason: str,
 ) -> PolicyResolution:
-    """Use guided assistance as the effective policy when resolution is unknown."""
+    """Use YELLOW when policy is absent or uncertain; the tutor permits assistance."""
     return PolicyResolution(
         policy_flag="YELLOW",
         canonical_policy="PROCESS_DISCLOSURE",

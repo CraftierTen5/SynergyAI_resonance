@@ -41,19 +41,19 @@ def create_preprocess_router(
         records: Sequence[Mapping[str, object]] | None = ()
         if assignment_id:
             if policy_lookup is None:
-                records = ()
+                records = None
             else:
                 try:
                     records = policy_lookup(assignment_id)
                 except Exception as exc:
                     raise HTTPException(status_code=503, detail="Assignment policy lookup is unavailable") from exc
             initial_policy = resolve_policy(assignment_id=assignment_id, authoritative_records=records)
+            if initial_policy.resolution_reason == "ASSIGNMENT_NOT_FOUND":
+                raise HTTPException(status_code=409, detail={"code": "ASSIGNMENT_NOT_FOUND"})
             if initial_policy.policy_flag == "RED":
                 raise HTTPException(status_code=403, detail={"code": "AI_USE_PROHIBITED", "reason": initial_policy.resolution_reason})
             if initial_policy.policy_flag == "UNKNOWN":
                 raise HTTPException(status_code=409, detail={"code": initial_policy.resolution_reason, "policy_flag": "UNKNOWN"})
-            if initial_policy.policy_flag == "YELLOW" and not disclosure_acknowledged:
-                raise HTTPException(status_code=428, detail={"code": "DISCLOSURE_ACK_REQUIRED", "required_conditions": initial_policy.required_conditions})
         else:
             initial_policy = None
         encoded_images: list[str] = []

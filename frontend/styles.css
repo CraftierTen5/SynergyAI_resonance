@@ -328,14 +328,6 @@ body {
   transform: translateY(-1px);
 }
 
-/* Reflective Question Box */
-.reflective-box {
-  background: var(--sage-primary-light);
-  border-left: 4px solid var(--sage-primary);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  padding: 14px 18px;
-}
-
 /* Step progression node */
 .step-node {
   display: flex;

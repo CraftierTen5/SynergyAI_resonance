@@ -45,8 +45,9 @@ class QwenInferenceModelClient:
             part for part in (normalized.assignment_context, normalized.extracted_document_text) if part
         )
         # These bounds mirror the separate inference server's PredictRequest.
-        if len(normalized.normalized_message) > 8_000 or len(context) > 4_000:
+        if len(normalized.normalized_message) > 8_000:
             raise ProviderResponseError("normalized input exceeds the inference API limits")
+        context = context[:4_000]
 
         payload = {
             "user_message": normalized.normalized_message,

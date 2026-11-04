@@ -76,7 +76,7 @@ async def test_successful_concept_prediction_uses_documented_request_contract():
 
 
 @pytest.mark.asyncio
-async def test_answer_request_cannot_override_yellow_assignment_policy():
+async def test_answer_request_is_allowed_under_yellow_default_policy():
     observed: list[dict[str, object]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -110,12 +110,12 @@ async def test_answer_request_cannot_override_yellow_assignment_policy():
     assert observed[0]["policy_flag"] == "YELLOW"
     assert result.status == "completed"
     assert result.policy_level == "YELLOW"
-    assert result.selected_action == "GUIDE_PLANNING"
+    assert result.selected_action == "FULL_ASSISTANCE"
     assert result.model_version == "qwen3.5-4b-lora"
 
 
 @pytest.mark.asyncio
-async def test_ambiguous_prediction_becomes_clarification_not_generation():
+async def test_ambiguous_prediction_uses_best_effort_explanation_on_green_policy():
     client = QwenInferenceModelClient(
         make_settings(),
         transport=response({"intent": "AMBIGUOUS", "recommended_action": "CLARIFY_REQUEST"}),
@@ -134,9 +134,9 @@ async def test_ambiguous_prediction_becomes_clarification_not_generation():
         TrustedUserContext(user_id="demo-student", institution_id="demo-school"),
     )
 
-    assert result.status == "needs_clarification"
+    assert result.status == "completed"
     assert result.intent == "AMBIGUOUS"
-    assert result.selected_action == "CLARIFY_REQUEST"
+    assert result.selected_action == "EXPLAIN_CONCEPT"
 
 
 @pytest.mark.asyncio

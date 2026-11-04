@@ -81,6 +81,7 @@ class AssignmentPolicyContext(BaseModel):
     institution_id: str
     policy_level: PolicyLevel
     policy_version: str
+    policy_review_required: bool = False
 
     @field_validator("policy_level", mode="before")
     @classmethod

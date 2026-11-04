@@ -53,9 +53,10 @@ async def seed_institution(store, institution_id: str) -> None:
 
 def test_migration_discovery_includes_layer_6a_after_existing_history():
     migrations = migration_files()
-    assert migrations[-1].name == "0007_layer_6a_persistence.sql"
+    assert migrations[-1].name == "0008_accounts.sql"
     assert [path.name for path in migrations] == sorted(path.name for path in migrations)
-    sql = migrations[-1].read_text(encoding="utf-8")
+    persistence = next(path for path in migrations if path.name == "0007_layer_6a_persistence.sql")
+    sql = persistence.read_text(encoding="utf-8")
     for name in (
         "core.model_versions", "core.documents", "core.document_extractions",
         "assessment.conversations", "assessment.messages", "assessment.agent_runs",
@@ -64,6 +65,12 @@ def test_migration_discovery_includes_layer_6a_after_existing_history():
         assert f"CREATE TABLE {name}" in sql
     assert "FORCE ROW LEVEL SECURITY" in sql
     assert "CREATE POLICY tenant_isolation" in sql
+
+    # Account registration and login use the tenant-scoped users table.
+    accounts = migrations[-1].read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS core.users" in accounts
+    assert "ALTER TABLE core.users FORCE ROW LEVEL SECURITY" in accounts
+    assert "CREATE POLICY tenant_isolation ON core.users" in accounts
 
 
 def test_migration_does_not_change_prior_migrations():

@@ -40,9 +40,6 @@ class ResponseGuard:
         if canonical_mode not in {"SOCRATIC", "FULL_ASSISTANCE"}:
             return OutputCheck(False, "MODE_INVALID")
 
-        if canonical_level == "YELLOW" and canonical_mode != "SOCRATIC":
-            return OutputCheck(False, "POLICY_MODE_MISMATCH")
-
         if canonical_mode == "SOCRATIC" and len(response_text) > self.max_socratic_chars:
             return OutputCheck(False, "YELLOW_OUTPUT_TOO_LONG")
 
