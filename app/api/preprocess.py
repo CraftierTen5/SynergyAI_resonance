@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping, Sequence
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from pydantic import ValidationError
 
 from app.schemas.preprocessing import PolicyEvidence, PreprocessResponse, PreprocessingRequest
@@ -19,12 +19,16 @@ from app.services.policy.resolver import resolve_policy
 def create_preprocess_router(
     preprocessing: GeminiPreprocessingService,
     policy_lookup: Callable[[str], Sequence[Mapping[str, object]] | None] | None = None,
+    authenticate: Callable[[str | None], Mapping[str, str]] | None = None,
 ) -> APIRouter:
     """Build a mountable API router; lookup must return authoritative policy records."""
+    if authenticate is None:
+        raise ValueError("preprocessing router requires an authentication callback")
     router = APIRouter()
 
     @router.post("/preprocess", response_model=PreprocessResponse)
     async def preprocess(
+        authorization: str | None = Header(default=None),
         text: str = Form(default=""),
         assignment_id: str | None = Form(default=None, max_length=128),
         language_hint: str | None = Form(default=None, max_length=35),
@@ -34,6 +38,7 @@ def create_preprocess_router(
         disclosure_acknowledged: bool = Form(default=False),
         files: list[UploadFile] = File(default=[]),
     ) -> PreprocessResponse:
+        authenticate(authorization)
         if len(files) > preprocessing.max_images:
             raise HTTPException(status_code=413, detail="Too many images")
         if len(text) > preprocessing.max_text_length:
