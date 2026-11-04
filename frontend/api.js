@@ -149,7 +149,7 @@ export class ResonanceAPI {
     return data;
   }
 
-  async sendTutorMessage({ requestId, assignmentId, message, languagePreference, disclosureAcknowledged, documentText = '', images = [] }) {
+  async sendTutorMessage({ requestId, assignmentId, message, languagePreference, disclosureAcknowledged, documentText = '', images = [], documentContext = '' }) {
     const t0 = performance.now();
     const payload = {
       document_text: documentText,
@@ -159,6 +159,7 @@ export class ResonanceAPI {
       message,
       language_preference: languagePreference || "en",
       disclosure_acknowledged: Boolean(disclosureAcknowledged),
+      document_context: String(documentContext || '').slice(0, 60000),
     };
 
     try {
@@ -169,13 +170,54 @@ export class ResonanceAPI {
       });
 
       const data = await res.json().catch(() => ({}));
-      const safePayload = { ...payload, message: '[redacted]' };
+      const safePayload = {
+        ...payload,
+        message: '[redacted]',
+        document_text: payload.document_text ? '[redacted]' : '',
+        document_context: payload.document_context ? '[redacted]' : '',
+        images: payload.images.length ? '[redacted]' : [],
+      };
       this.logEvent('/api/tutor/chat', 'POST', res.status, safePayload, data, Math.round(performance.now() - t0));
       return { ok: res.ok, status: res.status, data };
     } catch (err) {
-      const safePayload = { ...payload, message: '[redacted]' };
+      const safePayload = {
+        ...payload,
+        message: '[redacted]',
+        document_text: payload.document_text ? '[redacted]' : '',
+        document_context: payload.document_context ? '[redacted]' : '',
+        images: payload.images.length ? '[redacted]' : [],
+      };
       this.logEvent('/api/tutor/chat', 'POST', 0, safePayload, { error: err.message }, Math.round(performance.now() - t0));
       return { ok: false, status: 0, data: { status: 'error', message: 'Backend unavailable.' } };
+    }
+  }
+
+  async checkAssignmentPolicyDocument({ assignmentId, document }) {
+    const formData = new FormData();
+    formData.append('document', document);
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/api/assignments/${encodeURIComponent(assignmentId)}/policy-document`,
+        { method: 'POST', headers: this.authHeaders(), body: formData },
+      );
+      const data = await res.json().catch(() => ({}));
+      this.logEvent(
+        '/api/assignments/{id}/policy-document', 'POST', res.status,
+        { assignmentId, documentAttached: true },
+        {
+          status: data.status,
+          policy_level: data.policy_level,
+          policy_review_required: data.policy_review_required,
+        },
+        0,
+      );
+      return { ok: res.ok, status: res.status, data };
+    } catch (err) {
+      this.logEvent(
+        '/api/assignments/{id}/policy-document', 'POST', 0,
+        { assignmentId, documentAttached: true }, { error: err.message }, 0,
+      );
+      return { ok: false, status: 0, data: { detail: 'Policy verification service unavailable.' } };
     }
   }
 

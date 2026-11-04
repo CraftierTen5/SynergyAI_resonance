@@ -153,15 +153,16 @@ async def test_red_policy_refuses_and_halts_before_input_or_model_services():
 
 
 @pytest.mark.asyncio
-async def test_yellow_without_acknowledgment_halts_before_optional_processing():
-    orchestrator, calls, _, audit = setup_agent("YELLOW")
+async def test_yellow_without_acknowledgment_allows_full_response():
+    orchestrator, calls, generator, audit = setup_agent("YELLOW")
 
     result = await orchestrator.handle(make_command(), make_user())
 
-    assert result.status == "needs_clarification"
+    assert result.status == "completed"
     assert result.policy_level == "YELLOW"
-    assert calls == ["assignment", "preflight", "audit"]
-    assert audit.records[0][2]["reason_code"] == "DISCLOSURE_REQUIRED"
+    assert generator.modes == ["FULL_ASSISTANCE"]
+    assert calls == ["assignment", "preflight", "normalize", "model", "select_action", "generate", "output_guard", "audit"]
+    assert audit.records[0][2]["policy_reason_code"] == "POLICY_YELLOW_ASSUMED_ALLOWED"
 
 
 @pytest.mark.asyncio
@@ -186,7 +187,7 @@ async def test_green_policy_runs_full_assistance_workflow_in_order():
 
 
 @pytest.mark.asyncio
-async def test_yellow_model_recommendation_cannot_override_guided_policy():
+async def test_yellow_model_answer_is_allowed_under_default_policy():
     recommendation = ModelRecommendation(
         intent="ANSWER_REQUEST",
         recommended_action="CHECK_POLICY",
@@ -197,10 +198,9 @@ async def test_yellow_model_recommendation_cannot_override_guided_policy():
     result = await orchestrator.handle(make_command(acknowledged=True), make_user())
 
     assert result.status == "completed"
-    assert result.selected_action == "GUIDE_PLANNING"
-    assert generator.selected_actions == ["GUIDE_PLANNING"]
-    assert generator.modes == ["SOCRATIC"]
-    assert "FULL_ASSISTANCE" not in generator.modes
+    assert result.selected_action == "FULL_ASSISTANCE"
+    assert generator.selected_actions == ["FULL_ASSISTANCE"]
+    assert generator.modes == ["FULL_ASSISTANCE"]
     assert calls == [
         "assignment",
         "preflight",

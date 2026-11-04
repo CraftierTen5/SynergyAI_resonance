@@ -79,6 +79,10 @@ class AgentOrchestrator:
             document_text=command.document_text,
             images=command.images,
         )
+        if command.document_context:
+            normalized = normalized.model_copy(
+                update={"extracted_document_text": command.document_context}
+            )
         recommendation = await self.model_client.classify(normalized)
         decision = self.policy_actions.select_action(
             assignment,
@@ -157,7 +161,13 @@ class AgentOrchestrator:
         metadata: dict[str, object] = {
             "stage": "completed",
             "normalization_method": normalized.normalization_method,
-            "policy_reason_code": decision.reason_code,
+            "policy_reason_code": (
+                "POLICY_UNCERTAIN_ASSUMED_ALLOWED"
+                if assignment.policy_review_required and assignment.policy_level != "RED"
+                else "POLICY_YELLOW_ASSUMED_ALLOWED"
+                if assignment.policy_level == "YELLOW"
+                else decision.reason_code
+            ),
         }
         if output_guard_reason is not None:
             metadata["output_guard_reason_code"] = output_guard_reason

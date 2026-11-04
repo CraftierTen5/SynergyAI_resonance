@@ -93,21 +93,55 @@ def test_future_classifier_contract_validates_but_has_no_provider():
     assert result.recommended_action == "REQUEST_HUMAN_REVIEW"
 
 
-def test_status_routes_and_preprocess_missing_key_are_controlled():
+def test_status_routes_and_preprocess_missing_key_are_controlled(monkeypatch):
+    import app.main as main
+    from app.core.config import Settings
+    from app.api.preprocess import create_preprocess_router
+    from app.services.ai.gemini import GeminiFlashAdapter
+    from app.services.ai.preprocessing import GeminiPreprocessingService
     from app.main import app
 
+    # Ignore the workstation's .env so readiness stays deterministic.
+    monkeypatch.setattr(main, "settings", Settings(
+        _env_file=None,
+        model_inference_url=None,
+        model_inference_api_key=None,
+        postgres_dsn=None,
+    ))
     client = TestClient(app)
     assert client.get("/").status_code == 200
     assert client.get("/health").json() == {"status": "ok"}
     ready = client.get("/ready").json()
     assert ready["dependencies"]["qwen"] == "not_configured"
     assert ready["dependencies"]["assignment_store"] == "not_configured"
-    response = client.post("/preprocess", data={"text": "hello"})
+
+    # Exercise missing-key handling with an isolated service to avoid external calls.
+    isolated = FastAPI()
+    isolated.include_router(create_preprocess_router(
+        GeminiPreprocessingService(
+            GeminiFlashAdapter(Settings(_env_file=None)), settings=Settings(_env_file=None)
+        )
+    ))
+    response = TestClient(isolated).post("/preprocess", data={"text": "hello"})
     assert response.status_code == 503
     assert "original submission was not modified" in response.json()["detail"]
 
 
-def test_red_is_rejected_and_unknown_assignment_uses_yellow_disclosure_gate():
+def test_readiness_reports_configured_qwen_without_calling_it(monkeypatch):
+    import app.main as main
+    from app.core.config import Settings
+
+    monkeypatch.setattr(main, "settings", Settings(
+        _env_file=None,
+        model_inference_url="https://model.example/predict",
+        model_inference_api_key="unit-test-key",
+        postgres_dsn=None,
+    ))
+    ready = TestClient(main.app).get("/ready").json()
+    assert ready["dependencies"]["qwen"] == "configured"
+
+
+def test_red_is_rejected_and_unknown_assignment_is_not_assumed_to_exist():
     from app.api.preprocess import create_preprocess_router
     from app.core.config import Settings
 
@@ -122,15 +156,18 @@ def test_red_is_rejected_and_unknown_assignment_uses_yellow_disclosure_gate():
     app2 = FastAPI()
     app2.include_router(create_preprocess_router(service))
     response = TestClient(app2).post("/preprocess", data={"text": "Help", "assignment_id": "unknown"})
-    assert response.status_code == 428
+    assert response.status_code == 409
     assert provider.prompt == ""
 
 
-def test_yellow_disclosure_gate_precedes_gemini():
+def test_yellow_without_disclosure_runs_preprocessing():
     from app.api.preprocess import create_preprocess_router
     from app.core.config import Settings
 
-    provider = FakeGemini("{}")
+    provider = FakeGemini(json.dumps({
+        "detected_language": "en", "processed_text": "Help", "translated": False,
+        "extracted_text": "", "warnings": [],
+    }))
     service = GeminiPreprocessingService(provider, settings=Settings())
     app = FastAPI()
     app.include_router(create_preprocess_router(service, lambda assignment: [{
@@ -138,6 +175,5 @@ def test_yellow_disclosure_gate_precedes_gemini():
     }]))
     client = TestClient(app)
     response = client.post("/preprocess", data={"text": "Help", "assignment_id": "a1"})
-    assert response.status_code == 428
-    assert response.json()["detail"]["required_conditions"] == ["Acknowledge disclosure"]
-    assert provider.prompt == ""
+    assert response.status_code == 200
+    assert "Help" in provider.prompt

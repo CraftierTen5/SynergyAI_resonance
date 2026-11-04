@@ -49,6 +49,7 @@ class TutorCommand(BaseModel):
     document_ids: list[str] = Field(default_factory=list)
     document_text: str = Field(default="", max_length=50_000)
     images: list[str] = Field(default_factory=list, max_length=5)
+    document_context: str = Field(default="", max_length=60_000)
 
 
 class NormalizedInput(BaseModel):

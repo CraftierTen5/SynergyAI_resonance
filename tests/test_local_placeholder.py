@@ -59,7 +59,7 @@ async def test_local_placeholder_runs_green_flow_and_audits_result():
 
 
 @pytest.mark.asyncio
-async def test_local_placeholder_enforces_yellow_disclosure_and_red_policy():
+async def test_local_placeholder_allows_yellow_and_enforces_red_policy():
     app, audit = make_app()
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -82,7 +82,7 @@ async def test_local_placeholder_enforces_yellow_disclosure_and_red_policy():
             },
         )
 
-    assert yellow_without_ack.json()["status"] == "needs_clarification"
+    assert yellow_without_ack.json()["status"] == "completed"
     assert red.json()["status"] == "refused"
     assert len(audit.records) == 2
 

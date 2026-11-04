@@ -66,6 +66,23 @@ async def test_missing_policy_is_yellow_and_requires_review():
 
 
 @pytest.mark.asyncio
+async def test_silent_policy_is_yellow_without_forcing_review():
+    provider = FakeProvider({
+        "decision": "YELLOW",
+        "extracted_text": "",
+        "reason": "The readable assignment does not mention AI use.",
+        "evidence": [],
+        "requires_human_review": False,
+        "confidence": 0.99,
+    })
+    result = await AssignmentPolicyDocumentClassifier(provider).classify(
+        "Write a short report about photosynthesis."
+    )
+    assert result.policy_tier == "YELLOW"
+    assert result.requires_human_review is False
+
+
+@pytest.mark.asyncio
 async def test_low_confidence_green_is_downgraded_to_yellow():
     provider = FakeProvider({
         "decision": "GREEN",
@@ -112,3 +129,31 @@ async def test_empty_document_fails_closed_without_calling_provider():
     result = await AssignmentPolicyDocumentClassifier(NeverCalled()).classify("  ")
     assert result.policy_tier == "YELLOW"
     assert result.reason == "NO_READABLE_ASSIGNMENT_TEXT"
+
+
+@pytest.mark.asyncio
+async def test_pdf_attachment_is_passed_to_policy_classifier():
+    class PdfProvider:
+        def __init__(self):
+            self.documents = None
+
+        async def generate_structured(self, prompt, documents, schema=None):
+            self.documents = documents
+            assert "attached assignment document" in prompt
+            assert schema is not None
+            return json.dumps({
+                "decision": "RED",
+                "extracted_text": "Do not use AI for this assignment.",
+                "reason": "AI use is prohibited.",
+                "evidence": ["Do not use AI for this assignment."],
+                "requires_human_review": False,
+                "confidence": 0.99,
+            })
+
+    provider = PdfProvider()
+    pdf_bytes = b"%PDF-1.7\npolicy"
+    result = await AssignmentPolicyDocumentClassifier(provider).classify(
+        "", documents=[("application/pdf", pdf_bytes)]
+    )
+    assert provider.documents == [("application/pdf", pdf_bytes)]
+    assert result.policy_tier == "RED"

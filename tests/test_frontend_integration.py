@@ -16,7 +16,8 @@ def test_frontend_routes_and_static_serving():
     res_html = client.get("/", headers={"accept": "text/html,application/xhtml+xml"})
     assert res_html.status_code == 200
     assert "ResonanceAI" in res_html.text
-    assert "Mobile App Look" in res_html.text
+    assert 'id="mobile-container"' in res_html.text
+    assert 'id="mobile-screen-mount"' in res_html.text
 
     # 3. Direct /app route
     res_app = client.get("/app")
@@ -40,15 +41,10 @@ def test_frontend_routes_and_static_serving():
 def test_api_assignments_and_disclosure_receipt():
     client = TestClient(app)
 
-    # Assignments list
+    # Assignments are tenant data and must not be public.
     res = client.get("/api/assignments")
-    assert res.status_code == 200
-    assignments = res.json()
-    assert len(assignments) == 3
-    ids = [a["assignment_id"] for a in assignments]
-    assert "demo-green" in ids
-    assert "demo-yellow" in ids
-    assert "demo-red" in ids
+    assert res.status_code == 401
+    assert res.json()["detail"] == "Sign in is required"
 
     # Cryptographic disclosure submission
     disclose_payload = {
@@ -60,10 +56,46 @@ def test_api_assignments_and_disclosure_receipt():
     res_disclose = client.post("/api/disclose", json=disclose_payload)
     assert res_disclose.status_code == 200
     receipt = res_disclose.json()
-    assert receipt["status"] == "success"
+    assert receipt["status"] == "development_placeholder"
     assert "verification_hash" in receipt
     assert len(receipt["verification_hash"]) == 64  # SHA-256
-    assert receipt["audit_status"] == "COMMITTED_IMMUTABLE"
+    assert receipt["audit_status"] == "DEVELOPMENT_PLACEHOLDER"
+
+
+def test_authenticated_assignment_listing_uses_tenant_scoped_store(monkeypatch):
+    import app.main as main
+
+    class FakeTenantStore:
+        async def fetch(self, query):
+            assert "WHERE a.archived_at IS NULL" in query
+            return [{
+                "assignment_id": "assignment-1",
+                "course_code": "CS101",
+                "course_title": "Computer Science",
+                "title": "Trees",
+                "policy_level": "YELLOW",
+                "due_at": None,
+                "system_instruction": "",
+            }]
+
+    monkeypatch.setattr(main, "_session", lambda authorization: {
+        "user_id": "user-1", "institution_id": "school-1"
+    })
+    monkeypatch.setattr(main, "_store_for", lambda request, session: FakeTenantStore())
+
+    response = TestClient(app).get("/api/assignments", headers={"Authorization": "Bearer test-token"})
+    assert response.status_code == 200
+    assert response.json() == [{
+        "assignment_id": "assignment-1",
+        "course_code": "CS101",
+        "course_title": "Computer Science",
+        "title": "Trees",
+        "policy_level": "YELLOW",
+        "policy_name": "YELLOW",
+        "policy_review_required": False,
+        "description": "",
+        "due_at": None,
+    }]
 
 
 def test_api_config_telemetry():
@@ -79,7 +111,7 @@ def test_api_config_telemetry():
 def test_tutor_chat_endpoints():
     client = TestClient(app)
 
-    # 1. Green policy: allows Socratic response
+    # 1. Green policy: allows direct response
     cmd_green = {
         "request_id": "test-req-1",
         "assignment_id": "demo-green",
@@ -92,7 +124,7 @@ def test_tutor_chat_endpoints():
     assert data_green["status"] == "completed"
     assert data_green["policy_level"] == "GREEN"
 
-    # 2. Yellow policy without disclosure: requires clarification / acknowledgment
+    # 2. Yellow policy without disclosure: assumes allowed and answers
     cmd_yellow_unack = {
         "request_id": "test-req-2",
         "assignment_id": "demo-yellow",
@@ -103,6 +135,7 @@ def test_tutor_chat_endpoints():
     assert res_yellow_unack.status_code == 200
     data_yellow_unack = res_yellow_unack.json()
     assert data_yellow_unack["policy_level"] == "YELLOW"
+    assert data_yellow_unack["status"] == "completed"
 
     # 3. Red policy: fail-closed refusal
     cmd_red = {
