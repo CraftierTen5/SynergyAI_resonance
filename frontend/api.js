@@ -237,6 +237,7 @@ export class ResonanceAPI {
     try {
       const res = await fetch(`${this.baseUrl}/preprocess`, {
         method: 'POST',
+        headers: this.authHeaders(),
         body: formData,
       });
 
