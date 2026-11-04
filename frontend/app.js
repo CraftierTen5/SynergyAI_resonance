@@ -3,11 +3,37 @@
  * High-fidelity implementation of Figma designs for Web and Mobile App views.
  */
 
-import { ResonanceAPI } from './api.js?v=tutor-answer-ui-1';
+import { ResonanceAPI } from './api.js?v=tutor-api-payload-2';
 
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 }[char]));
+
+function formatTutorError(error, fallback = 'The tutor could not generate a response.') {
+  if (Array.isArray(error)) {
+    const messages = error.map(issue => {
+      if (typeof issue === 'string') return issue;
+      if (!issue || typeof issue !== 'object') return '';
+      const field = Array.isArray(issue.loc) ? issue.loc.at(-1) : '';
+      const message = typeof issue.msg === 'string'
+        ? issue.msg
+        : typeof issue.message === 'string'
+          ? issue.message
+          : '';
+      if (field && message === 'Extra inputs are not permitted') {
+        return 'The app version is out of date. Refresh the page and try again.';
+      }
+      return field && message ? `${field}: ${message}` : message;
+    }).filter(Boolean);
+    return messages.length ? messages.join('; ') : fallback;
+  }
+  if (typeof error === 'string' && error.trim()) return error.trim();
+  if (error && typeof error === 'object') {
+    if (typeof error.message === 'string' && error.message.trim()) return error.message.trim();
+    if (typeof error.msg === 'string' && error.msg.trim()) return error.msg.trim();
+  }
+  return fallback;
+}
 
 function renderInlineMarkdown(value) {
   const codeSpans = [];
@@ -1100,7 +1126,7 @@ class ResonanceApp {
               intent: d.intent,
             });
           } else {
-            const errorMessage = res.data?.detail || res.data?.message || 'The tutor could not generate a response.';
+            const errorMessage = formatTutorError(res.data?.detail ?? res.data?.message);
             this.state.chatMessages.push({
               id: `msg-${Date.now()}`,
               sender: 'tutor',
