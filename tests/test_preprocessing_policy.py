@@ -3,12 +3,18 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from app.schemas.preprocessing import PreprocessingRequest, ProcessingStatus
 from app.services.ai.errors import ProviderResponseError
 from app.services.ai.preprocessing import GeminiPreprocessingService
 from app.services.policy.resolver import resolve_policy
+
+
+def require_test_auth(authorization):
+    if authorization != "Bearer test-token":
+        raise HTTPException(status_code=401, detail="Sign in is required")
+    return {"user_id": "test-user", "institution_id": "test-institution"}
 
 
 class FakeGemini:
@@ -120,9 +126,10 @@ def test_status_routes_and_preprocess_missing_key_are_controlled(monkeypatch):
     isolated.include_router(create_preprocess_router(
         GeminiPreprocessingService(
             GeminiFlashAdapter(Settings(_env_file=None)), settings=Settings(_env_file=None)
-        )
+        ),
+        authenticate=require_test_auth,
     ))
-    response = TestClient(isolated).post("/preprocess", data={"text": "hello"})
+    response = TestClient(isolated).post("/preprocess", data={"text": "hello"}, headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 503
     assert "original submission was not modified" in response.json()["detail"]
 
@@ -147,15 +154,15 @@ def test_red_is_rejected_and_unknown_assignment_is_not_assumed_to_exist():
 
     provider = FakeGemini("{}"); service = GeminiPreprocessingService(provider, settings=Settings())
     app = FastAPI()
-    app.include_router(create_preprocess_router(service, lambda assignment: [{"policy": "NO_AI"}]))
+    app.include_router(create_preprocess_router(service, lambda assignment: [{"policy": "NO_AI"}], authenticate=require_test_auth))
     client = TestClient(app)
-    response = client.post("/preprocess", data={"text": "Help", "assignment_id": "a1"})
+    response = client.post("/preprocess", data={"text": "Help", "assignment_id": "a1"}, headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 403
     assert provider.prompt == ""
 
     app2 = FastAPI()
-    app2.include_router(create_preprocess_router(service))
-    response = TestClient(app2).post("/preprocess", data={"text": "Help", "assignment_id": "unknown"})
+    app2.include_router(create_preprocess_router(service, authenticate=require_test_auth))
+    response = TestClient(app2).post("/preprocess", data={"text": "Help", "assignment_id": "unknown"}, headers={"Authorization": "Bearer test-token"})
     assert response.status_code == 409
     assert provider.prompt == ""
 
@@ -172,7 +179,7 @@ def test_yellow_without_disclosure_runs_preprocessing():
     app = FastAPI()
     app.include_router(create_preprocess_router(service, lambda assignment: [{
         "policy": "PROCESS_DISCLOSURE", "required_conditions": ["Acknowledge disclosure"],
-    }]))
+    }], authenticate=require_test_auth))
     client = TestClient(app)
     response = client.post("/preprocess", data={"text": "Help", "assignment_id": "a1"})
     assert response.status_code == 200
