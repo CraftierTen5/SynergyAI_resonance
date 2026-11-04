@@ -1,3 +1,34 @@
+@'
+
+---
+
+# Application Screenshots & Results
+
+## 1. Student Dashboard
+
+![Student Dashboard](output/screenshots/dashboard.jpeg)
+
+## 2. AI Tutoring Interface
+
+![Student Chat](output/screenshots/student-chat.jpeg)
+
+## 3. Assignment Policy Detection
+
+![Red Policy Detection](output/screenshots/red-policy-detection.jpeg)
+
+## 4. Policy Classification Matrix
+
+![Policy Matrix](output/screenshots/matrix.jpeg)
+
+## 5. Viva / Assessment Interface
+
+![Viva Interface](output/screenshots/viva.jpeg)
+
+'@ | Add-Content -Path "README.md" -Encoding UTF8
+
+
+
+
 # ResonanceAI backend
 
 ResonanceAI includes preprocessing, tenant-scoped PostgreSQL accounts and assignments, and a policy-gated tutor workflow. The local Qwen adapter predicts intent/action labels; a configured Groq or Gemini provider generates the student-facing response.
