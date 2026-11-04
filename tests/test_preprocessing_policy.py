@@ -115,6 +115,8 @@ def test_status_routes_and_preprocess_missing_key_are_controlled(monkeypatch):
         postgres_dsn=None,
     ))
     client = TestClient(app)
+    unauthenticated = client.post("/preprocess", data={"text": "must not reach Gemini"})
+    assert unauthenticated.status_code == 401
     assert client.get("/").status_code == 200
     assert client.get("/health").json() == {"status": "ok"}
     ready = client.get("/ready").json()
