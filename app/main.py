@@ -90,11 +90,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount Preprocessing router with demo policy lookup when local placeholder is active
+# Mount preprocessing behind the same signed-session authentication as other student APIs.
+def _authenticate_preprocess(authorization: str | None) -> dict[str, str]:
+    return _session(authorization)
+
+
 app.include_router(
     create_preprocess_router(
         preprocessing,
         policy_lookup=None,
+        authenticate=_authenticate_preprocess,
     )
 )
 
