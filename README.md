@@ -1,6 +1,3 @@
-@'
-
----
 
 # Application Screenshots & Results
 
