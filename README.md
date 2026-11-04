@@ -21,9 +21,6 @@
 
 ![Viva Interface](output/screenshots/viva.jpeg)
 
-'@ | Add-Content -Path "README.md" -Encoding UTF8
-
-
 
 
 # ResonanceAI backend
